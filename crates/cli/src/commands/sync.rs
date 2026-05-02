@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use toolhub_core::tool::ToolMeta;
 use toolhub_ingestion::{mcp_json, plugin_json, skill_md, walker};
 use toolhub_recommender::embed::Embedder;
-use toolhub_storage::{embeddings, open, tools};
+use toolhub_storage::{embeddings, fts, open, tools};
 
 use crate::db_path::default_db_path;
 
@@ -77,6 +77,8 @@ pub async fn run() -> anyhow::Result<()> {
     if ok == 0 {
         return Ok(());
     }
+
+    fts::rebuild(&conn)?;
 
     let metas = tools::list_all(&conn)?;
     let texts: Vec<String> = metas.iter().map(embed_text).collect();

@@ -5,6 +5,7 @@ use refinery::Migration;
 use rusqlite::Connection;
 
 pub mod embeddings;
+pub mod fts;
 pub mod tools;
 
 const M001: &str = include_str!("../migrations/001_init.sql");

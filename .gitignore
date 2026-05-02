@@ -44,3 +44,15 @@ logs/
 # already existing elements were commented out
 
 #/target
+
+# AI / Claude Code state — keep public repo project-only
+/CLAUDE.md
+/PLAN.md
+/*.md
+!/README.md
+.claude/
+.omc/
+.fastembed_cache/
+file-history/
+*.log
+

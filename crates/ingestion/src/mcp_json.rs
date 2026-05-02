@@ -23,10 +23,9 @@ struct McpEntry {
 }
 
 pub fn parse_mcp_servers(path: &Path) -> anyhow::Result<Vec<ToolMeta>> {
-    let raw = fs::read_to_string(path)
-        .with_context(|| format!("read {}", path.display()))?;
-    let parsed: McpServers = serde_json::from_str(&raw)
-        .with_context(|| format!("parse JSON {}", path.display()))?;
+    let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+    let parsed: McpServers =
+        serde_json::from_str(&raw).with_context(|| format!("parse JSON {}", path.display()))?;
 
     let now = Utc::now();
     let mut out = Vec::with_capacity(parsed.servers.len());
@@ -72,8 +71,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn fixture_path() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/mcp_servers.json")
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/mcp_servers.json")
     }
 
     #[test]

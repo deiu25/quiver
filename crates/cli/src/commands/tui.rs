@@ -39,8 +39,7 @@ type Term = Terminal<CrosstermBackend<Stdout>>;
 fn setup_terminal() -> anyhow::Result<Term> {
     enable_raw_mode().context("enable raw mode")?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
-        .context("enter alternate screen")?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).context("enter alternate screen")?;
     Terminal::new(CrosstermBackend::new(stdout)).context("create ratatui terminal")
 }
 

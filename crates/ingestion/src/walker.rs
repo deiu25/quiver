@@ -28,8 +28,7 @@ mod tests {
     use super::*;
 
     fn fixtures_root() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/skills")
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/skills")
     }
 
     #[test]

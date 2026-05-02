@@ -5,11 +5,7 @@ use toolhub_core::tool::{ToolMeta, ToolType};
 ///
 /// `query` is matched case-insensitively against name + description +
 /// category + triggers. `type_filter` AND-combines.
-pub fn apply(
-    tools: &[ToolMeta],
-    query: &str,
-    type_filter: Option<ToolType>,
-) -> Vec<usize> {
+pub fn apply(tools: &[ToolMeta], query: &str, type_filter: Option<ToolType>) -> Vec<usize> {
     let q = query.trim().to_lowercase();
     tools
         .iter()
@@ -27,16 +23,14 @@ fn matches_query(m: &ToolMeta, q: &str) -> bool {
     if m.name.to_lowercase().contains(q) {
         return true;
     }
-    if m
-        .description
+    if m.description
         .as_deref()
         .map(|d| d.to_lowercase().contains(q))
         .unwrap_or(false)
     {
         return true;
     }
-    if m
-        .category
+    if m.category
         .as_deref()
         .map(|c| c.to_lowercase().contains(q))
         .unwrap_or(false)

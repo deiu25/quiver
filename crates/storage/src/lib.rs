@@ -42,8 +42,7 @@ fn ensure_vec_extension() {
             *const rusqlite::ffi::sqlite3_api_routines,
         ) -> std::os::raw::c_int;
         unsafe {
-            let init: ExtInit =
-                std::mem::transmute(sqlite_vec::sqlite3_vec_init as *const ());
+            let init: ExtInit = std::mem::transmute(sqlite_vec::sqlite3_vec_init as *const ());
             rusqlite::ffi::sqlite3_auto_extension(Some(init));
         }
     });
@@ -54,8 +53,8 @@ fn ensure_vec_extension() {
 /// is wired — see PLAN.md §6 and §3.
 pub fn open(path: &Path) -> anyhow::Result<Connection> {
     ensure_vec_extension();
-    let mut conn = Connection::open(path)
-        .with_context(|| format!("open sqlite at {}", path.display()))?;
+    let mut conn =
+        Connection::open(path).with_context(|| format!("open sqlite at {}", path.display()))?;
     let migs = migrations()?;
     refinery::Runner::new(&migs)
         .run(&mut conn)
@@ -85,7 +84,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let conn = open(&dir.path().join("toolhub.sqlite")).unwrap();
         let names = table_names(&conn);
-        for expected in ["tools", "usage_events", "tool_scores", "sources", "tools_fts"] {
+        for expected in [
+            "tools",
+            "usage_events",
+            "tool_scores",
+            "sources",
+            "tools_fts",
+        ] {
             assert!(
                 names.contains(&expected.to_string()),
                 "missing {expected} in {names:?}"

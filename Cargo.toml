@@ -35,3 +35,5 @@ fastembed = "4"
 sqlite-vec = "0.1"
 ratatui = "0.29"
 crossterm = "0.28"
+rmcp = { version = "1", features = ["server", "macros", "transport-io", "schemars"] }
+schemars = "1"

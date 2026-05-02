@@ -14,6 +14,7 @@ toolhub-core = { path = "../core" }
 toolhub-storage = { path = "../storage" }
 toolhub-ingestion = { path = "../ingestion" }
 toolhub-recommender = { path = "../recommender" }
+toolhub-mcp-server = { path = "../mcp-server" }
 clap = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }

@@ -247,9 +247,19 @@ mod tests {
 
     fn fixture() -> Vec<ToolMeta> {
         vec![
-            meta("skill:design-md", "design-md", ToolType::Skill, Some("/tmp/d")),
+            meta(
+                "skill:design-md",
+                "design-md",
+                ToolType::Skill,
+                Some("/tmp/d"),
+            ),
             meta("skill:enhance", "enhance-prompt", ToolType::Skill, None),
-            meta("plugin:caveman", "caveman", ToolType::Plugin, Some("/tmp/c")),
+            meta(
+                "plugin:caveman",
+                "caveman",
+                ToolType::Plugin,
+                Some("/tmp/c"),
+            ),
             meta("mcp:ruflo", "ruflo", ToolType::Mcp, None),
             meta("cli:codeburn", "codeburn", ToolType::Cli, Some("/tmp/cb")),
         ]

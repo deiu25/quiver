@@ -24,8 +24,8 @@ fn fallback_name(dir: &Path) -> String {
 
 pub fn parse_skill_dir(dir: &Path) -> anyhow::Result<ToolMeta> {
     let skill_md = dir.join("SKILL.md");
-    let raw = fs::read_to_string(&skill_md)
-        .with_context(|| format!("read {}", skill_md.display()))?;
+    let raw =
+        fs::read_to_string(&skill_md).with_context(|| format!("read {}", skill_md.display()))?;
 
     let (fm_text, body) = split_frontmatter(&raw)
         .ok_or_else(|| anyhow!("missing YAML frontmatter in {}", skill_md.display()))?;
@@ -56,7 +56,9 @@ pub fn parse_skill_dir(dir: &Path) -> anyhow::Result<ToolMeta> {
 }
 
 fn split_frontmatter(raw: &str) -> Option<(&str, &str)> {
-    let rest = raw.strip_prefix("---\n").or_else(|| raw.strip_prefix("---\r\n"))?;
+    let rest = raw
+        .strip_prefix("---\n")
+        .or_else(|| raw.strip_prefix("---\r\n"))?;
     for delim in ["\n---\n", "\n---\r\n"] {
         if let Some(end) = rest.find(delim) {
             let fm = &rest[..end];

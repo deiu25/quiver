@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 
 mod commands {
     pub mod list;
+    pub mod mcp;
     pub mod recommend;
     pub mod sync;
     pub mod tui;
@@ -10,7 +11,11 @@ mod db_path;
 mod tui;
 
 #[derive(Parser)]
-#[command(name = "toolhub", version, about = "Claude Code tool registry & recommender")]
+#[command(
+    name = "toolhub",
+    version,
+    about = "Claude Code tool registry & recommender"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -34,6 +39,8 @@ enum Cmd {
     },
     /// Browse catalogued tools in an interactive TUI
     Tui,
+    /// Run the stdio MCP server (so Claude Code can call ToolHub mid-session)
+    Mcp,
 }
 
 #[tokio::main]
@@ -55,5 +62,6 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Cmd::Tui => commands::tui::run().await,
+        Cmd::Mcp => commands::mcp::run().await,
     }
 }

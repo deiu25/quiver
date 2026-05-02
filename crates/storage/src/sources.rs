@@ -6,12 +6,7 @@
 use chrono::Utc;
 use rusqlite::{Connection, params};
 
-pub fn upsert(
-    conn: &Connection,
-    id: &str,
-    type_: &str,
-    location: &str,
-) -> anyhow::Result<()> {
+pub fn upsert(conn: &Connection, id: &str, type_: &str, location: &str) -> anyhow::Result<()> {
     let now = Utc::now().to_rfc3339();
     conn.execute(
         "INSERT INTO sources (id, type, location, last_pulled_at, last_commit_sha)

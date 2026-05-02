@@ -84,12 +84,18 @@ mod tests {
 
     #[test]
     fn list_tab_cycles_type() {
-        assert_eq!(map(Mode::List, key(KeyCode::Tab)), Some(AppAction::CycleType));
+        assert_eq!(
+            map(Mode::List, key(KeyCode::Tab)),
+            Some(AppAction::CycleType)
+        );
     }
 
     #[test]
     fn list_esc_clears_filter() {
-        assert_eq!(map(Mode::List, key(KeyCode::Esc)), Some(AppAction::ClearFilter));
+        assert_eq!(
+            map(Mode::List, key(KeyCode::Esc)),
+            Some(AppAction::ClearFilter)
+        );
     }
 
     #[test]

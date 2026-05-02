@@ -25,7 +25,7 @@ impl Embedder {
     }
 
     pub fn embed_batch(&self, texts: Vec<String>) -> anyhow::Result<Vec<Vec<f32>>> {
-        Ok(self.model.embed(texts, None)?)
+        self.model.embed(texts, None)
     }
 }
 

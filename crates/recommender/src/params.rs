@@ -34,10 +34,7 @@ mod tests {
 
     #[test]
     fn quotes_each_token_and_or_joins() {
-        assert_eq!(
-            build_fts_query("design tokens"),
-            "\"design\" OR \"tokens\""
-        );
+        assert_eq!(build_fts_query("design tokens"), "\"design\" OR \"tokens\"");
     }
 
     #[test]

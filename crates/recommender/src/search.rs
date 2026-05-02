@@ -134,10 +134,7 @@ pub fn hybrid_from_score_maps(
     let mut hits: Vec<Hit> = all_ids
         .into_iter()
         .map(|id| {
-            let vec_n = vec_sims
-                .get(&id)
-                .map(|v| (v - vmin) / vspan)
-                .unwrap_or(0.0);
+            let vec_n = vec_sims.get(&id).map(|v| (v - vmin) / vspan).unwrap_or(0.0);
             let fts_n = fts_hits
                 .get(&id)
                 .map(|b| (-b - fmin) / fspan)
@@ -248,10 +245,7 @@ mod tests {
     #[test]
     fn hybrid_falls_back_to_cosine_when_fts_empty() {
         let q = vec![1.0, 0.0];
-        let catalog = vec![
-            ("a".into(), vec![1.0, 0.0]),
-            ("b".into(), vec![0.0, 1.0]),
-        ];
+        let catalog = vec![("a".into(), vec![1.0, 0.0]), ("b".into(), vec![0.0, 1.0])];
         let fts = HashMap::new();
         let hits = hybrid_top_k(&q, &catalog, &fts, 2, 0.6, 0.4);
         assert_eq!(hits[0].tool_id, "a");

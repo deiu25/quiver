@@ -15,6 +15,7 @@ struct InstalledPlugins {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct Entry {
     #[serde(default)]
     scope: Option<String>,
@@ -31,10 +32,9 @@ struct Entry {
 }
 
 pub fn parse_installed_plugins(path: &Path) -> anyhow::Result<Vec<ToolMeta>> {
-    let raw = fs::read_to_string(path)
-        .with_context(|| format!("read {}", path.display()))?;
-    let parsed: InstalledPlugins = serde_json::from_str(&raw)
-        .with_context(|| format!("parse JSON {}", path.display()))?;
+    let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+    let parsed: InstalledPlugins =
+        serde_json::from_str(&raw).with_context(|| format!("parse JSON {}", path.display()))?;
 
     let now = Utc::now();
     let mut out = Vec::with_capacity(parsed.plugins.len());
@@ -66,9 +66,9 @@ pub fn parse_installed_plugins(path: &Path) -> anyhow::Result<Vec<ToolMeta>> {
             source_repo: None,
             install_path: None,
             description: Some(description),
-            long_description: head.and_then(|e| e.git_commit_sha.clone()).map(|sha| {
-                format!("scope: {scope}\nversion: {version}\ngitCommitSha: {sha}")
-            }),
+            long_description: head
+                .and_then(|e| e.git_commit_sha.clone())
+                .map(|sha| format!("scope: {scope}\nversion: {version}\ngitCommitSha: {sha}")),
             category: None,
             triggers: Vec::new(),
             examples: Vec::new(),
@@ -90,8 +90,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn fixture_path() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/installed_plugins.json")
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/installed_plugins.json")
     }
 
     #[test]
@@ -100,11 +99,13 @@ mod tests {
         assert_eq!(metas.len(), 2);
         assert_eq!(metas[0].id, "plugin:caveman@caveman");
         assert_eq!(metas[0].r#type, ToolType::Plugin);
-        assert!(metas[0]
-            .description
-            .as_ref()
-            .unwrap()
-            .contains("marketplace caveman"));
+        assert!(
+            metas[0]
+                .description
+                .as_ref()
+                .unwrap()
+                .contains("marketplace caveman")
+        );
         assert_eq!(metas[1].id, "plugin:context7@claude-plugins-official");
     }
 }

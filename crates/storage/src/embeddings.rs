@@ -12,7 +12,7 @@ fn to_blob(v: &[f32]) -> Vec<u8> {
 }
 
 fn from_blob(b: &[u8]) -> anyhow::Result<Vec<f32>> {
-    if b.len() % F32_BYTES != 0 {
+    if !b.len().is_multiple_of(F32_BYTES) {
         return Err(anyhow!(
             "embedding blob length {} is not a multiple of 4",
             b.len()

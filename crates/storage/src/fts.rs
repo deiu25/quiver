@@ -71,7 +71,11 @@ mod tests {
         .unwrap();
         tools::upsert(
             &conn,
-            &sample("skill:caveman", "caveman", "compress markdown caveman speak"),
+            &sample(
+                "skill:caveman",
+                "caveman",
+                "compress markdown caveman speak",
+            ),
         )
         .unwrap();
         rebuild(&conn).unwrap();

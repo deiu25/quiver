@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use toolhub_core::tool::ToolMeta;
 use toolhub_ingestion::{mcp_json, plugin_json, skill_md, walker};
@@ -100,7 +100,7 @@ fn embed_text(m: &ToolMeta) -> String {
     format!("{}\n{}\n{}", m.name, desc, triggers)
 }
 
-fn skill_roots(home: &PathBuf) -> Vec<PathBuf> {
+fn skill_roots(home: &Path) -> Vec<PathBuf> {
     if home.as_os_str().is_empty() {
         return Vec::new();
     }

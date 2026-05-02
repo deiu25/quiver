@@ -7,7 +7,7 @@ pub async fn run() -> anyhow::Result<()> {
     let conn = open(&db_path)?;
     let metas = tools::list_all(&conn)?;
 
-    println!("{:<32} {:<8} {}", "id", "type", "description");
+    println!("{:<32} {:<8} description", "id", "type");
     println!("{}", "-".repeat(96));
     if metas.is_empty() {
         println!("(empty — run `toolhub sync` to populate)");

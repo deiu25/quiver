@@ -1151,6 +1151,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "toolhub-core",
+ "walkdir",
 ]
 
 [[package]]
@@ -1174,8 +1175,10 @@ name = "toolhub-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "refinery",
  "rusqlite",
+ "serde_json",
  "tempfile",
  "toolhub-core",
 ]

@@ -2,7 +2,9 @@ use clap::{Parser, Subcommand};
 
 mod commands {
     pub mod list;
+    pub mod sync;
 }
+mod db_path;
 
 #[derive(Parser)]
 #[command(name = "toolhub", version, about = "Claude Code tool registry & recommender")]
@@ -41,10 +43,7 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::List => commands::list::run().await,
-        Cmd::Sync => {
-            println!("sync: not yet implemented (Phase 1 follow-up)");
-            Ok(())
-        }
+        Cmd::Sync => commands::sync::run().await,
         Cmd::Recommend { task } => {
             println!("recommend({task:?}): not yet implemented (Phase 1 follow-up)");
             Ok(())

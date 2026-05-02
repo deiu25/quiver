@@ -1,19 +1,23 @@
-use std::path::PathBuf;
+use toolhub_storage::{open, tools};
 
-use toolhub_ingestion::skill_md;
+use crate::db_path::default_db_path;
 
 pub async fn run() -> anyhow::Result<()> {
-    let home = std::env::var("HOME")?;
-    let skill_dir: PathBuf = [&home, ".claude", "skills", "design-md"].iter().collect();
-    let meta = skill_md::parse_skill_dir(&skill_dir)?;
+    let db_path = default_db_path()?;
+    let conn = open(&db_path)?;
+    let metas = tools::list_all(&conn)?;
 
-    println!("{:<20} {:<10} {}", "id", "type", "description");
-    println!("{}", "-".repeat(80));
-    println!(
-        "{:<20} {:<10} {}",
-        meta.id,
-        format!("{:?}", meta.r#type).to_lowercase(),
-        meta.description.as_deref().unwrap_or("")
-    );
+    println!("{:<32} {:<8} {}", "id", "type", "description");
+    println!("{}", "-".repeat(96));
+    if metas.is_empty() {
+        println!("(empty — run `toolhub sync` to populate)");
+        return Ok(());
+    }
+    for m in metas {
+        let t = format!("{:?}", m.r#type).to_lowercase();
+        let desc_full = m.description.unwrap_or_default();
+        let desc: String = desc_full.chars().take(80).collect();
+        println!("{:<32} {:<8} {}", m.id, t, desc);
+    }
     Ok(())
 }

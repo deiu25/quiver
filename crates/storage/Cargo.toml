@@ -10,6 +10,8 @@ toolhub-core = { path = "../core" }
 anyhow = { workspace = true }
 rusqlite = { workspace = true }
 refinery = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

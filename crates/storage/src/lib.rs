@@ -4,6 +4,8 @@ use anyhow::Context;
 use refinery::Migration;
 use rusqlite::Connection;
 
+pub mod tools;
+
 const M001: &str = include_str!("../migrations/001_init.sql");
 const M002: &str = include_str!("../migrations/002_fts.sql");
 

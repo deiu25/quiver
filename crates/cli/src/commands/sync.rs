@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use toolhub_core::tool::ToolMeta;
@@ -17,7 +18,7 @@ pub async fn run() -> anyhow::Result<()> {
     let home = std::env::var("HOME").unwrap_or_default();
     let home_path = PathBuf::from(&home);
 
-    let mut ok = 0usize;
+    let mut seen_ids: HashSet<String> = HashSet::new();
     let mut skipped = 0usize;
 
     // 1) SKILL.md walker
@@ -26,7 +27,7 @@ pub async fn run() -> anyhow::Result<()> {
             match skill_md::parse_skill_dir(&dir) {
                 Ok(meta) => {
                     tools::upsert(&conn, &meta)?;
-                    ok += 1;
+                    seen_ids.insert(meta.id);
                 }
                 Err(err) => {
                     eprintln!("skip {}: {err:#}", dir.display());
@@ -43,7 +44,7 @@ pub async fn run() -> anyhow::Result<()> {
             Ok(metas) => {
                 for meta in metas {
                     tools::upsert(&conn, &meta)?;
-                    ok += 1;
+                    seen_ids.insert(meta.id);
                 }
             }
             Err(err) => eprintln!("skip {}: {err:#}", plugin_path.display()),
@@ -57,15 +58,16 @@ pub async fn run() -> anyhow::Result<()> {
             Ok(metas) => {
                 for meta in metas {
                     tools::upsert(&conn, &meta)?;
-                    ok += 1;
+                    seen_ids.insert(meta.id);
                 }
             }
             Err(err) => eprintln!("skip {}: {err:#}", mcp_path.display()),
         }
     }
 
+    let unique = seen_ids.len();
     println!(
-        "synced {ok} tool(s){} → {}",
+        "synced {unique} tool(s){} → {}",
         if skipped > 0 {
             format!(" ({skipped} skipped)")
         } else {
@@ -74,7 +76,7 @@ pub async fn run() -> anyhow::Result<()> {
         db_path.display()
     );
 
-    if ok == 0 {
+    if unique == 0 {
         return Ok(());
     }
 

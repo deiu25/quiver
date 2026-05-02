@@ -101,11 +101,9 @@ impl App {
             (Mode::List, AppAction::End) => {
                 self.selected = self.filtered.len().saturating_sub(1);
             }
-            (Mode::List, AppAction::Enter) => {
-                if self.selected_tool().is_some() {
-                    self.mode = Mode::Detail;
-                    self.detail_scroll = 0;
-                }
+            (Mode::List, AppAction::Enter) if self.selected_tool().is_some() => {
+                self.mode = Mode::Detail;
+                self.detail_scroll = 0;
             }
             (Mode::List, AppAction::EnterSearch) => {
                 self.search_snapshot = Some(self.search_buf.clone());

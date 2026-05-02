@@ -69,10 +69,10 @@ fn run_app(terminal: &mut Term, mut app: App) -> anyhow::Result<()> {
         let Some(action) = tui_event::map(app.mode, k) else {
             continue;
         };
-        if let Some(SideEffect::OpenEditor(path)) = app.apply(action) {
-            if let Err(e) = run_editor(terminal, &path) {
-                app.status = format!("editor failed: {e}");
-            }
+        if let Some(SideEffect::OpenEditor(path)) = app.apply(action)
+            && let Err(e) = run_editor(terminal, &path)
+        {
+            app.status = format!("editor failed: {e}");
         }
         if app.should_quit {
             return Ok(());

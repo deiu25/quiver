@@ -1,0 +1,46 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local databases
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+toolhub.db
+
+# Embedding model cache
+.fastembed_cache/
+models/
+
+# Logs
+*.log
+logs/
+
+# Env
+.env
+.env.local
+
+# Claude Code per-user overrides
+.claude/settings.local.json
+.claude/.session*
+
+# oh-my-claudecode local session state
+.omc/
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target

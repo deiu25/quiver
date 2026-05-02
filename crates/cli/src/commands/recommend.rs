@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
+use toolhub_recommender::params::{
+    COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
+};
 use toolhub_recommender::{embed::Embedder, search};
 use toolhub_storage::{embeddings, fts, open, tools};
 
 use crate::db_path::default_db_path;
-
-const VEC_CANDIDATES: usize = 50;
-const FTS_CANDIDATES: usize = 50;
-const COS_WEIGHT: f32 = 0.6;
-const FTS_WEIGHT: f32 = 0.4;
 
 pub async fn run(task: String) -> anyhow::Result<()> {
     let conn = open(&default_db_path()?)?;
@@ -58,18 +56,4 @@ pub async fn run(task: String) -> anyhow::Result<()> {
         println!("{:>6.3}  {:<40}  {}", h.score, h.tool_id, desc);
     }
     Ok(())
-}
-
-/// Tokenise on whitespace, double-quote each token (escaping internal quotes),
-/// and OR-join. OR keeps recall when only some words match.
-fn build_fts_query(task: &str) -> String {
-    let toks: Vec<String> = task
-        .split_whitespace()
-        .filter(|t| !t.is_empty())
-        .map(|t| {
-            let cleaned = t.replace('"', "");
-            format!("\"{cleaned}\"")
-        })
-        .collect();
-    toks.join(" OR ")
 }

@@ -1,0 +1,20 @@
+[package]
+name = "toolhub-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "toolhub"
+path = "src/main.rs"
+
+[dependencies]
+toolhub-core = { path = "../core" }
+toolhub-storage = { path = "../storage" }
+toolhub-ingestion = { path = "../ingestion" }
+clap = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

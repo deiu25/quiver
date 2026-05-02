@@ -21,3 +21,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
+
+[dev-dependencies]
+chrono = { workspace = true }

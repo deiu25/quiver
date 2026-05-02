@@ -6,6 +6,7 @@ mod commands {
     pub mod sync;
 }
 mod db_path;
+mod tui;
 
 #[derive(Parser)]
 #[command(name = "toolhub", version, about = "Claude Code tool registry & recommender")]

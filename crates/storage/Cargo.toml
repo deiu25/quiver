@@ -8,3 +8,8 @@ repository.workspace = true
 [dependencies]
 toolhub-core = { path = "../core" }
 anyhow = { workspace = true }
+rusqlite = { workspace = true }
+refinery = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

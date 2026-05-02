@@ -8,10 +8,18 @@ use toolhub_core::tool::{ToolMeta, ToolType};
 
 #[derive(Debug, Deserialize)]
 struct Frontmatter {
-    name: String,
+    #[serde(default)]
+    name: Option<String>,
     description: Option<String>,
     #[serde(rename = "allowed-tools", default)]
     allowed_tools: Option<Vec<String>>,
+}
+
+fn fallback_name(dir: &Path) -> String {
+    dir.file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown")
+        .to_string()
 }
 
 pub fn parse_skill_dir(dir: &Path) -> anyhow::Result<ToolMeta> {
@@ -26,10 +34,11 @@ pub fn parse_skill_dir(dir: &Path) -> anyhow::Result<ToolMeta> {
         .with_context(|| format!("parse frontmatter in {}", skill_md.display()))?;
 
     let now = Utc::now();
+    let name = fm.name.unwrap_or_else(|| fallback_name(dir));
     Ok(ToolMeta {
-        id: format!("skill:{}", fm.name),
+        id: format!("skill:{name}"),
         r#type: ToolType::Skill,
-        name: fm.name,
+        name: name.clone(),
         source_repo: None,
         install_path: Some(dir.display().to_string()),
         description: fm.description,
@@ -94,5 +103,21 @@ mod tests {
     #[test]
     fn missing_frontmatter_returns_none() {
         assert!(split_frontmatter("no frontmatter here").is_none());
+    }
+
+    #[test]
+    fn frontmatter_without_name_falls_back_to_dir_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let skill_dir = dir.path().join("widget-maker");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\ndescription: Builds widgets\n---\nbody\n",
+        )
+        .unwrap();
+        let meta = parse_skill_dir(&skill_dir).unwrap();
+        assert_eq!(meta.name, "widget-maker");
+        assert_eq!(meta.id, "skill:widget-maker");
+        assert_eq!(meta.description.as_deref(), Some("Builds widgets"));
     }
 }

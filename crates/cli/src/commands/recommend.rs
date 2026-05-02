@@ -5,20 +5,27 @@ use toolhub_storage::{embeddings, fts, open, tools};
 
 use crate::db_path::default_db_path;
 
+const VEC_CANDIDATES: usize = 50;
 const FTS_CANDIDATES: usize = 50;
 const COS_WEIGHT: f32 = 0.6;
 const FTS_WEIGHT: f32 = 0.4;
 
 pub async fn run(task: String) -> anyhow::Result<()> {
     let conn = open(&default_db_path()?)?;
-    let catalog = embeddings::list_all(&conn)?;
-    if catalog.is_empty() {
-        println!("(empty index — run `toolhub sync` first)");
-        return Ok(());
-    }
 
     let embedder = Embedder::new()?;
     let q_emb = embedder.embed_one(&task)?;
+
+    // sqlite-vec returns cosine *distance* in [0, 2]; convert to similarity.
+    let vec_sims: HashMap<String, f32> = embeddings::vec_search(&conn, &q_emb, VEC_CANDIDATES)?
+        .into_iter()
+        .map(|(id, dist)| (id, 1.0 - dist))
+        .collect();
+
+    if vec_sims.is_empty() {
+        println!("(empty index — run `toolhub sync` first)");
+        return Ok(());
+    }
 
     let fts_query = build_fts_query(&task);
     let fts_hits: HashMap<String, f32> = if fts_query.is_empty() {
@@ -27,14 +34,13 @@ pub async fn run(task: String) -> anyhow::Result<()> {
         match fts::search(&conn, &fts_query, FTS_CANDIDATES) {
             Ok(rows) => rows.into_iter().collect(),
             Err(err) => {
-                eprintln!("fts search failed: {err:#} (falling back to cosine-only)");
+                eprintln!("fts search failed: {err:#} (falling back to vec-only)");
                 HashMap::new()
             }
         }
     };
 
-    let hits =
-        search::hybrid_top_k(&q_emb, &catalog, &fts_hits, 3, COS_WEIGHT, FTS_WEIGHT);
+    let hits = search::hybrid_from_score_maps(&vec_sims, &fts_hits, 3, COS_WEIGHT, FTS_WEIGHT);
 
     let by_id: HashMap<String, _> = tools::list_all(&conn)?
         .into_iter()
@@ -55,8 +61,7 @@ pub async fn run(task: String) -> anyhow::Result<()> {
 }
 
 /// Tokenise on whitespace, double-quote each token (escaping internal quotes),
-/// and OR-join. OR is preferred over implicit AND so a multi-word query still
-/// returns hits when only some words match.
+/// and OR-join. OR keeps recall when only some words match.
 fn build_fts_query(task: &str) -> String {
     let toks: Vec<String> = task
         .split_whitespace()

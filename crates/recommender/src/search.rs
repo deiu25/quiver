@@ -100,6 +100,64 @@ pub fn hybrid_top_k(
     hits
 }
 
+/// Hybrid combine from two pre-computed score maps. Use when scores already
+/// come from the DB (vec0 distance + FTS BM25) and we don't want to recompute
+/// cosine over the whole catalog. `vec_sims` should already be similarity
+/// (e.g. `1.0 - cosine_distance`); `fts_hits` carries raw BM25 (more-negative
+/// = better — the function negates internally).
+pub fn hybrid_from_score_maps(
+    vec_sims: &HashMap<String, f32>,
+    fts_hits: &HashMap<String, f32>,
+    k: usize,
+    cos_w: f32,
+    fts_w: f32,
+) -> Vec<Hit> {
+    let mut all_ids: std::collections::HashSet<String> = vec_sims.keys().cloned().collect();
+    all_ids.extend(fts_hits.keys().cloned());
+
+    let vec_vals: Vec<f32> = vec_sims.values().copied().collect();
+    let (vmin, vmax) = if vec_vals.is_empty() {
+        (0.0, 1.0)
+    } else {
+        min_max(&vec_vals)
+    };
+    let vspan = (vmax - vmin).max(1e-6);
+
+    let fts_sims: Vec<f32> = fts_hits.values().map(|b| -b).collect();
+    let (fmin, fmax) = if fts_sims.is_empty() {
+        (0.0, 1.0)
+    } else {
+        min_max(&fts_sims)
+    };
+    let fspan = (fmax - fmin).max(1e-6);
+
+    let mut hits: Vec<Hit> = all_ids
+        .into_iter()
+        .map(|id| {
+            let vec_n = vec_sims
+                .get(&id)
+                .map(|v| (v - vmin) / vspan)
+                .unwrap_or(0.0);
+            let fts_n = fts_hits
+                .get(&id)
+                .map(|b| (-b - fmin) / fspan)
+                .unwrap_or(0.0);
+            Hit {
+                tool_id: id,
+                score: cos_w * vec_n + fts_w * fts_n,
+            }
+        })
+        .collect();
+
+    hits.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    hits.truncate(k);
+    hits
+}
+
 fn min_max(xs: &[f32]) -> (f32, f32) {
     let mut lo = f32::INFINITY;
     let mut hi = f32::NEG_INFINITY;
@@ -171,6 +229,20 @@ mod tests {
         assert_eq!(hits.len(), 3);
         // "b" should top "a" because BM25 bonus tips the scales.
         assert_eq!(hits[0].tool_id, "b");
+    }
+
+    #[test]
+    fn hybrid_from_score_maps_combines_both_signals() {
+        let mut vec_sims = HashMap::new();
+        vec_sims.insert("a".into(), 1.00);
+        vec_sims.insert("b".into(), 0.95);
+        vec_sims.insert("c".into(), 0.10);
+        let mut fts_hits = HashMap::new();
+        fts_hits.insert("b".into(), -10.0); // strong BM25 (more negative = better)
+        fts_hits.insert("c".into(), -2.0);
+        let hits = hybrid_from_score_maps(&vec_sims, &fts_hits, 3, 0.6, 0.4);
+        assert_eq!(hits.len(), 3);
+        assert_eq!(hits[0].tool_id, "b"); // BM25 boost lifts above pure-cosine "a"
     }
 
     #[test]

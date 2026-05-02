@@ -32,3 +32,4 @@ refinery = { version = "0.8", features = ["rusqlite"] }
 tempfile = "3"
 walkdir = "2"
 fastembed = "4"
+sqlite-vec = "0.1"

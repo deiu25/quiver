@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::Once;
 
 use anyhow::Context;
 use refinery::Migration;
@@ -10,20 +11,47 @@ pub mod tools;
 
 const M001: &str = include_str!("../migrations/001_init.sql");
 const M002: &str = include_str!("../migrations/002_fts.sql");
+const M003: &str = include_str!("../migrations/003_vec.sql");
 const M004: &str = include_str!("../migrations/004_embeddings.sql");
 
 fn migrations() -> anyhow::Result<Vec<Migration>> {
     Ok(vec![
         Migration::unapplied("V1__init", M001).context("parse V1__init")?,
         Migration::unapplied("V2__fts", M002).context("parse V2__fts")?,
+        Migration::unapplied("V3__vec", M003).context("parse V3__vec")?,
         Migration::unapplied("V4__embeddings", M004).context("parse V4__embeddings")?,
     ])
+}
+
+static VEC_INIT: Once = Once::new();
+
+/// Register the sqlite-vec extension as an auto-extension so every
+/// `Connection::open` after this point loads `vec0`. Idempotent.
+fn ensure_vec_extension() {
+    VEC_INIT.call_once(|| {
+        // sqlite_vec::sqlite3_vec_init has the exact extension entry-point
+        // signature `unsafe extern "C" fn(*mut sqlite3, *mut *mut c_char,
+        // *const sqlite3_api_routines) -> c_int`. Cast through *const () to
+        // bridge potential c_char vs i8/u8 platform differences without
+        // dragging in libsqlite3-sys directly.
+        type ExtInit = unsafe extern "C" fn(
+            *mut rusqlite::ffi::sqlite3,
+            *mut *mut std::os::raw::c_char,
+            *const rusqlite::ffi::sqlite3_api_routines,
+        ) -> std::os::raw::c_int;
+        unsafe {
+            let init: ExtInit =
+                std::mem::transmute(sqlite_vec::sqlite3_vec_init as *const ());
+            rusqlite::ffi::sqlite3_auto_extension(Some(init));
+        }
+    });
 }
 
 /// Open a SQLite DB at `path` and run all pending migrations (001 + 002).
 /// Migration 003 (`tools_vec`) is deferred until the `sqlite-vec` extension
 /// is wired — see PLAN.md §6 and §3.
 pub fn open(path: &Path) -> anyhow::Result<Connection> {
+    ensure_vec_extension();
     let mut conn = Connection::open(path)
         .with_context(|| format!("open sqlite at {}", path.display()))?;
     let migs = migrations()?;

@@ -4,5 +4,5 @@
 
 CREATE VIRTUAL TABLE tools_vec USING vec0(
     tool_id   TEXT PRIMARY KEY,
-    embedding FLOAT[384]
+    embedding FLOAT[384] distance_metric=cosine
 );

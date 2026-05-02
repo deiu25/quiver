@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "plugins": {
+    "caveman@caveman": [
+      {
+        "scope": "user",
+        "installPath": "/home/example/.claude/plugins/cache/caveman/caveman/ef6050c5e184",
+        "version": "ef6050c5e184",
+        "installedAt": "2026-04-01T10:00:00.000Z",
+        "lastUpdated": "2026-04-15T12:30:00.000Z",
+        "gitCommitSha": "ef6050c5e184abcdef0123456789abcdef012345"
+      }
+    ],
+    "context7@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/home/example/.claude/plugins/cache/claude-plugins-official/context7/unknown",
+        "version": "unknown",
+        "installedAt": "2026-03-11T20:28:44.416Z",
+        "lastUpdated": "2026-04-10T10:38:04.834Z",
+        "gitCommitSha": "bd041495bd2a1f3e21317f37277b2f5aa152b759"
+      }
+    ]
+  }
+}

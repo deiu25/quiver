@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use toolhub_core::tool::ToolMeta;
-use toolhub_ingestion::{skill_md, walker};
+use toolhub_ingestion::{mcp_json, plugin_json, skill_md, walker};
 use toolhub_recommender::embed::Embedder;
 use toolhub_storage::{embeddings, open, tools};
 
@@ -14,9 +14,14 @@ pub async fn run() -> anyhow::Result<()> {
     }
     let conn = open(&db_path)?;
 
+    let home = std::env::var("HOME").unwrap_or_default();
+    let home_path = PathBuf::from(&home);
+
     let mut ok = 0usize;
     let mut skipped = 0usize;
-    for root in skill_roots() {
+
+    // 1) SKILL.md walker
+    for root in skill_roots(&home_path) {
         for dir in walker::discover_skill_dirs(&root) {
             match skill_md::parse_skill_dir(&dir) {
                 Ok(meta) => {
@@ -30,6 +35,35 @@ pub async fn run() -> anyhow::Result<()> {
             }
         }
     }
+
+    // 2) Plugins
+    let plugin_path = home_path.join(".claude/plugins/installed_plugins.json");
+    if plugin_path.exists() {
+        match plugin_json::parse_installed_plugins(&plugin_path) {
+            Ok(metas) => {
+                for meta in metas {
+                    tools::upsert(&conn, &meta)?;
+                    ok += 1;
+                }
+            }
+            Err(err) => eprintln!("skip {}: {err:#}", plugin_path.display()),
+        }
+    }
+
+    // 3) MCP servers
+    let mcp_path = home_path.join(".claude/mcp_servers.json");
+    if mcp_path.exists() {
+        match mcp_json::parse_mcp_servers(&mcp_path) {
+            Ok(metas) => {
+                for meta in metas {
+                    tools::upsert(&conn, &meta)?;
+                    ok += 1;
+                }
+            }
+            Err(err) => eprintln!("skip {}: {err:#}", mcp_path.display()),
+        }
+    }
+
     println!(
         "synced {ok} tool(s){} → {}",
         if skipped > 0 {
@@ -62,13 +96,13 @@ fn embed_text(m: &ToolMeta) -> String {
     format!("{}\n{}\n{}", m.name, desc, triggers)
 }
 
-fn skill_roots() -> Vec<PathBuf> {
-    let home = match std::env::var("HOME") {
-        Ok(h) => h,
-        Err(_) => return Vec::new(),
-    };
+fn skill_roots(home: &PathBuf) -> Vec<PathBuf> {
+    if home.as_os_str().is_empty() {
+        return Vec::new();
+    }
     vec![
-        PathBuf::from(&home).join(".claude/skills"),
-        PathBuf::from(&home).join(".agents/skills"),
+        home.join(".claude/skills"),
+        home.join(".agents/skills"),
+        home.join(".claude/plugins/cache"),
     ]
 }

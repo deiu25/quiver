@@ -9,7 +9,7 @@ pub fn discover_skill_dirs(root: &Path) -> Vec<PathBuf> {
         return Vec::new();
     }
     WalkDir::new(root)
-        .max_depth(3)
+        .max_depth(8)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file() && e.file_name() == "SKILL.md")

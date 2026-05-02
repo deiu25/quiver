@@ -32,6 +32,8 @@ enum Cmd {
         /// Tool id, e.g. `skill:design-md`
         id: String,
     },
+    /// Browse catalogued tools in an interactive TUI
+    Tui,
 }
 
 #[tokio::main]
@@ -52,5 +54,6 @@ async fn main() -> anyhow::Result<()> {
             println!("info({id:?}): not yet implemented (Phase 1 follow-up)");
             Ok(())
         }
+        Cmd::Tui => commands::tui::run().await,
     }
 }

@@ -4,6 +4,7 @@ mod commands {
     pub mod list;
     pub mod recommend;
     pub mod sync;
+    pub mod tui;
 }
 mod db_path;
 mod tui;

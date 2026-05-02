@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 
 mod commands {
     pub mod list;
+    pub mod recommend;
     pub mod sync;
 }
 mod db_path;
@@ -17,7 +18,7 @@ struct Cli {
 enum Cmd {
     /// List catalogued tools
     List,
-    /// Re-scan filesystem and refresh DB
+    /// Re-scan filesystem and refresh DB (also re-embeds every tool)
     Sync,
     /// Recommend tools for a task
     Recommend {
@@ -44,10 +45,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.cmd {
         Cmd::List => commands::list::run().await,
         Cmd::Sync => commands::sync::run().await,
-        Cmd::Recommend { task } => {
-            println!("recommend({task:?}): not yet implemented (Phase 1 follow-up)");
-            Ok(())
-        }
+        Cmd::Recommend { task } => commands::recommend::run(task).await,
         Cmd::Info { id } => {
             println!("info({id:?}): not yet implemented (Phase 1 follow-up)");
             Ok(())

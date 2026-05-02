@@ -13,6 +13,7 @@ path = "src/main.rs"
 toolhub-core = { path = "../core" }
 toolhub-storage = { path = "../storage" }
 toolhub-ingestion = { path = "../ingestion" }
+toolhub-recommender = { path = "../recommender" }
 clap = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }

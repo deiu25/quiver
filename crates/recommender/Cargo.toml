@@ -6,5 +6,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-toolhub-core = { path = "../core" }
-anyhow = { workspace = true }
+toolhub-core    = { path = "../core" }
+toolhub-storage = { path = "../storage" }
+anyhow          = { workspace = true }
+fastembed       = { workspace = true }

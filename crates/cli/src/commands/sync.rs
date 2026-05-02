@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
+use toolhub_core::tool::ToolMeta;
 use toolhub_ingestion::{skill_md, walker};
-use toolhub_storage::{open, tools};
+use toolhub_recommender::embed::Embedder;
+use toolhub_storage::{embeddings, open, tools};
 
 use crate::db_path::default_db_path;
 
@@ -37,7 +39,27 @@ pub async fn run() -> anyhow::Result<()> {
         },
         db_path.display()
     );
+
+    if ok == 0 {
+        return Ok(());
+    }
+
+    let metas = tools::list_all(&conn)?;
+    let texts: Vec<String> = metas.iter().map(embed_text).collect();
+    let embedder = Embedder::new()?;
+    let vectors = embedder.embed_batch(texts)?;
+    for (m, v) in metas.iter().zip(&vectors) {
+        embeddings::upsert(&conn, &m.id, v)?;
+    }
+    println!("embedded {} tool(s)", vectors.len());
+
     Ok(())
+}
+
+fn embed_text(m: &ToolMeta) -> String {
+    let desc = m.description.as_deref().unwrap_or("");
+    let triggers = m.triggers.join(", ");
+    format!("{}\n{}\n{}", m.name, desc, triggers)
 }
 
 fn skill_roots() -> Vec<PathBuf> {

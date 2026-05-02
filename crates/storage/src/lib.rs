@@ -4,15 +4,18 @@ use anyhow::Context;
 use refinery::Migration;
 use rusqlite::Connection;
 
+pub mod embeddings;
 pub mod tools;
 
 const M001: &str = include_str!("../migrations/001_init.sql");
 const M002: &str = include_str!("../migrations/002_fts.sql");
+const M004: &str = include_str!("../migrations/004_embeddings.sql");
 
 fn migrations() -> anyhow::Result<Vec<Migration>> {
     Ok(vec![
         Migration::unapplied("V1__init", M001).context("parse V1__init")?,
         Migration::unapplied("V2__fts", M002).context("parse V2__fts")?,
+        Migration::unapplied("V4__embeddings", M004).context("parse V4__embeddings")?,
     ])
 }
 

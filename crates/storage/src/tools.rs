@@ -133,6 +133,43 @@ pub fn list_all(conn: &Connection) -> anyhow::Result<Vec<ToolMeta>> {
     Ok(out)
 }
 
+pub fn get(conn: &Connection, id: &str) -> anyhow::Result<Option<ToolMeta>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, type, name, source_repo, install_path, description, long_description,
+                category, triggers, examples, invocation, requires, enabled,
+                added_at, last_seen_at, last_used_at
+         FROM tools WHERE id = ?",
+    )?;
+    let mut rows = stmt.query(rusqlite::params![id])?;
+    let Some(row) = rows.next()? else {
+        return Ok(None);
+    };
+    let triggers: String = row.get(8)?;
+    let examples: String = row.get(9)?;
+    let requires: String = row.get(11)?;
+    let added_at: String = row.get(13)?;
+    let last_seen_at: String = row.get(14)?;
+    let last_used_at: Option<String> = row.get(15)?;
+    Ok(Some(ToolMeta {
+        id: row.get(0)?,
+        r#type: type_from_str(&row.get::<_, String>(1)?)?,
+        name: row.get(2)?,
+        source_repo: row.get(3)?,
+        install_path: row.get(4)?,
+        description: row.get(5)?,
+        long_description: row.get(6)?,
+        category: row.get(7)?,
+        triggers: serde_json::from_str(&triggers)?,
+        examples: serde_json::from_str(&examples)?,
+        invocation: row.get(10)?,
+        requires: serde_json::from_str(&requires)?,
+        enabled: row.get::<_, i64>(12)? != 0,
+        added_at: parse_ts(&added_at)?,
+        last_seen_at: parse_ts(&last_seen_at)?,
+        last_used_at: last_used_at.as_deref().map(parse_ts).transpose()?,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

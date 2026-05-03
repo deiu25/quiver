@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Local tool registry, recommender, and background agent for Claude Code"
+keywords = ["claude-code", "cli", "registry", "recommender", "mcp"]
+categories = ["command-line-utilities", "development-tools"]
+homepage = "https://github.com/deiu25/quiver"
+documentation = "https://github.com/deiu25/quiver"
+readme = "README.md"
 
 [[bin]]
 name = "toolhub"

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Stats · ToolHub{% endblock %}
+{% block content %}
+<h1>Stats</h1>
+
+<h2>Acceptance (last 7 days)</h2>
+<div class="card">
+  <table>
+    <tr><th>Suggestions</th><td>{{ acceptance.suggested }}</td></tr>
+    <tr><th>Accepted</th><td>{{ acceptance.accepted }}</td></tr>
+    <tr><th>Acceptance rate</th><td>{{ acceptance.rate_pct_str }}%</td></tr>
+  </table>
+</div>
+
+<h2>Top tools (success&nbsp;×&nbsp;log&nbsp;samples)</h2>
+{% if top_tools.is_empty() %}
+  <p class="muted">No score rows yet — run <code>toolhub agent</code> + <code>toolhub score</code>.</p>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>Tool</th>
+      <th>Success rate</th>
+      <th>Samples</th>
+      <th>Combined</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in top_tools %}
+    <tr>
+      <td><a href="/tool/{{ r.tool_id }}">{{ r.tool_id }}</a></td>
+      <td>
+        <span class="bar" style="width:{{ r.bar_width_px }}px"></span>
+        <span class="score">{{ r.success_rate_pct }}%</span>
+      </td>
+      <td class="score">{{ r.sample_size }}</td>
+      <td class="score">{{ r.combined_str }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h2>Dead weight (no usage in 30 days)</h2>
+{% if dead_weight.is_empty() %}
+  <p class="muted">Every tool was used at least once in the last 30 days.</p>
+{% else %}
+<table>
+  <thead>
+    <tr><th>Tool</th><th>Type</th><th>Last seen</th></tr>
+  </thead>
+  <tbody>
+    {% for d in dead_weight %}
+    <tr>
+      <td><a href="/tool/{{ d.id }}">{{ d.id }}</a></td>
+      <td><span class="tag {{ d.type_name }}">{{ d.type_name }}</span></td>
+      <td class="muted">{{ d.last_seen_str }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h2>Sources</h2>
+<table>
+  <thead>
+    <tr><th>Source</th><th>Tools</th></tr>
+  </thead>
+  <tbody>
+    {% for s in sources %}
+    <tr>
+      <td>{{ s.name }}</td>
+      <td class="score">{{ s.count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,42 @@
+[package]
+name = "toolhub-web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+# Enable to read embedded assets from disk during dev (no rebuild on CSS edit).
+debug-embed = ["rust-embed/debug-embed"]
+
+[dependencies]
+toolhub-core = { path = "../core" }
+toolhub-storage = { path = "../storage" }
+toolhub-recommender = { path = "../recommender" }
+toolhub-agent = { path = "../agent" }
+toolhub-ingestion = { path = "../ingestion" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+rusqlite = { workspace = true }
+r2d2 = { workspace = true }
+r2d2_sqlite = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs", "signal", "time", "sync"] }
+tokio-stream = { workspace = true }
+futures-util = { workspace = true }
+async-stream = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+askama = { workspace = true }
+rust-embed = { workspace = true }
+mime_guess = { workspace = true }
+webbrowser = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+reqwest = { workspace = true }

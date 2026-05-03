@@ -17,6 +17,7 @@ mod assets;
 pub mod error;
 pub mod routes;
 mod state;
+mod views;
 
 pub use state::{AppState, EmbedderCell};
 

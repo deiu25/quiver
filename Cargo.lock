@@ -3992,6 +3992,7 @@ dependencies = [
  "toolhub-mcp-server",
  "toolhub-recommender",
  "toolhub-storage",
+ "toolhub-web",
  "tracing",
  "tracing-subscriber",
  "walkdir",

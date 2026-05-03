@@ -1,0 +1,19 @@
+{% if tools.is_empty() %}
+  <p class="muted">No tools match.</p>
+{% else %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for tool in tools %}
+        {% include "tool_card.html" %}
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}

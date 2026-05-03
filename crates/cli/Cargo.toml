@@ -16,6 +16,7 @@ toolhub-ingestion = { path = "../ingestion" }
 toolhub-recommender = { path = "../recommender" }
 toolhub-mcp-server = { path = "../mcp-server" }
 toolhub-agent = { path = "../agent" }
+toolhub-web = { path = "../web" }
 clap = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }

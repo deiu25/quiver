@@ -15,6 +15,6 @@ pub fn router(state: AppState) -> Router {
             get(|| async { axum::response::Redirect::to("/catalog") }),
         )
         .merge(catalog::routes())
-        .route("/static/{*path}", get(serve_static))
+        .route("/static/*path", get(serve_static))
         .with_state(state)
 }

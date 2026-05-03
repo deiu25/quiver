@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Catalog · ToolHub{% endblock %}
+{% block content %}
+<h1>Catalog <span class="muted">({{ total }})</span></h1>
+
+<form class="row" style="margin-bottom:1rem"
+      hx-get="/catalog/list"
+      hx-trigger="keyup changed delay:200ms from:input, change from:select"
+      hx-target="#catalog-list"
+      hx-include="this">
+  <input type="search" name="q" placeholder="Search name, description, triggers…"
+         value="{{ q }}" autocomplete="off" style="flex:1" />
+  <select name="type">
+    <option value="" {% if type_filter == "" %}selected{% endif %}>All types</option>
+    <option value="skill" {% if type_filter == "skill" %}selected{% endif %}>Skill</option>
+    <option value="plugin" {% if type_filter == "plugin" %}selected{% endif %}>Plugin</option>
+    <option value="mcp" {% if type_filter == "mcp" %}selected{% endif %}>MCP</option>
+    <option value="cli" {% if type_filter == "cli" %}selected{% endif %}>CLI</option>
+    <option value="doc" {% if type_filter == "doc" %}selected{% endif %}>Doc</option>
+  </select>
+</form>
+
+<div id="catalog-list">
+  {% include "catalog_list.html" %}
+</div>
+{% endblock %}

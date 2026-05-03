@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}ToolHub{% endblock %}</title>
+    <link rel="stylesheet" href="/static/app.css" />
+    <script src="/static/htmx.min.js" defer></script>
+    <script src="/static/htmx-sse.js" defer></script>
+  </head>
+  <body>
+    <header class="nav">
+      <span class="brand">ToolHub</span>
+      <nav>
+        <a href="/catalog" class="{% if active == "catalog" %}active{% endif %}">Catalog</a>
+        <a href="/recommend" class="{% if active == "recommend" %}active{% endif %}">Recommend</a>
+        <a href="/suggestions" class="{% if active == "suggestions" %}active{% endif %}">Suggestions</a>
+        <a href="/stats" class="{% if active == "stats" %}active{% endif %}">Stats</a>
+        <a href="/sources" class="{% if active == "sources" %}active{% endif %}">Sources</a>
+      </nav>
+      <span class="spacer"></span>
+      <span class="muted">127.0.0.1</span>
+    </header>
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

@@ -1,3 +1,4 @@
+use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -12,6 +13,7 @@ mod commands {
     pub mod recommend;
     pub mod remove;
     pub mod score;
+    pub mod serve;
     pub mod stats;
     pub mod sync;
     pub mod tui;
@@ -109,6 +111,20 @@ enum Cmd {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Serve the local web UI on 127.0.0.1 (Ctrl-C to stop).
+    /// Read-only against the same SQLite DB the CLI uses.
+    Serve {
+        /// TCP port to listen on
+        #[arg(long, default_value_t = 7777)]
+        port: u16,
+        /// Bind address. Defaults to loopback only — overriding accepts
+        /// non-localhost traffic at your own risk (no auth).
+        #[arg(long, default_value_t = IpAddr::V4(Ipv4Addr::LOCALHOST))]
+        host: IpAddr,
+        /// Open the listen URL in the default browser once the server is up.
+        #[arg(long)]
+        open: bool,
+    },
 }
 
 #[tokio::main]
@@ -142,5 +158,6 @@ async fn main() -> anyhow::Result<()> {
             hints_dir,
         } => commands::agent::run_cmd(sessions_dir, hints_dir).await,
         Cmd::Digest { days, out } => commands::digest::run_cmd(days, out).await,
+        Cmd::Serve { port, host, open } => commands::serve::run(host, port, open).await,
     }
 }

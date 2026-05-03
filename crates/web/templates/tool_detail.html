@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ tool.name }} · ToolHub{% endblock %}
+{% block content %}
+<a href="/catalog" class="muted">← back to catalog</a>
+<h1 style="margin-top:0.5rem">
+  {{ tool.name }}
+  <span class="tag {{ tool.type_name }}">{{ tool.type_name }}</span>
+</h1>
+
+<p class="muted"><code>{{ tool.id }}</code></p>
+
+{% if tool.description.is_some() %}
+<p>{{ tool.description.as_ref().unwrap() }}</p>
+{% endif %}
+
+<div class="card">
+  <table>
+    <tr><th>Invocation</th><td><code>{{ tool.invocation_or_dash() }}</code></td></tr>
+    <tr><th>Source</th><td>
+      {% if tool.source_repo.is_some() %}
+        <a href="{{ tool.source_repo.as_ref().unwrap() }}">{{ tool.source_repo.as_ref().unwrap() }}</a>
+      {% else %}
+        <span class="muted">—</span>
+      {% endif %}
+    </td></tr>
+    <tr><th>Install path</th><td><code>{{ tool.install_path_or_dash() }}</code></td></tr>
+    <tr><th>Category</th><td>{{ tool.category_or_dash() }}</td></tr>
+    <tr><th>Triggers</th><td>{{ tool.triggers_csv }}</td></tr>
+    <tr><th>Requires</th><td>{{ tool.requires_csv }}</td></tr>
+    <tr><th>Last seen</th><td class="muted">{{ tool.last_seen_at }}</td></tr>
+    <tr><th>Last used</th><td class="muted">{{ tool.last_used_or_dash() }}</td></tr>
+  </table>
+</div>
+
+{% if tool.long_description.is_some() %}
+<h2>Details</h2>
+<div class="card"><pre style="white-space:pre-wrap">{{ tool.long_description.as_ref().unwrap() }}</pre></div>
+{% endif %}
+
+{% if score.is_some() %}
+{% let s = score.as_ref().unwrap() %}
+<h2>Score</h2>
+<div class="card">
+  <table>
+    <tr><th>Success rate</th><td>{{ s.success_rate_pct }}%</td></tr>
+    <tr><th>Sample size</th><td>{{ s.sample_size }}</td></tr>
+    <tr><th>Avg cost (USD)</th><td>{{ s.avg_cost_str }}</td></tr>
+    <tr><th>Median duration (ms)</th><td>{{ s.median_duration_str }}</td></tr>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

@@ -10,11 +10,13 @@ pub mod fts;
 pub mod scores;
 pub mod sources;
 pub mod tools;
+pub mod usage;
 
 const M001: &str = include_str!("../migrations/001_init.sql");
 const M002: &str = include_str!("../migrations/002_fts.sql");
 const M003: &str = include_str!("../migrations/003_vec.sql");
 const M004: &str = include_str!("../migrations/004_embeddings.sql");
+const M005: &str = include_str!("../migrations/005_usage_uuid.sql");
 
 fn migrations() -> anyhow::Result<Vec<Migration>> {
     Ok(vec![
@@ -22,6 +24,7 @@ fn migrations() -> anyhow::Result<Vec<Migration>> {
         Migration::unapplied("V2__fts", M002).context("parse V2__fts")?,
         Migration::unapplied("V3__vec", M003).context("parse V3__vec")?,
         Migration::unapplied("V4__embeddings", M004).context("parse V4__embeddings")?,
+        Migration::unapplied("V5__usage_uuid", M005).context("parse V5__usage_uuid")?,
     ])
 }
 

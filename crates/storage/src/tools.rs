@@ -133,6 +133,27 @@ pub fn list_all(conn: &Connection) -> anyhow::Result<Vec<ToolMeta>> {
     Ok(out)
 }
 
+/// Delete every tool whose `source_repo` exactly matches `location`.
+/// Also clears matching rows from `tool_embeddings` and `tools_vec`.
+/// Caller should call `fts::rebuild` afterwards to drop stale FTS rows.
+/// Returns the list of deleted tool ids.
+pub fn delete_by_source_repo(conn: &Connection, location: &str) -> anyhow::Result<Vec<String>> {
+    let ids: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT id FROM tools WHERE source_repo = ?")?;
+        stmt.query_map(params![location], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    if ids.is_empty() {
+        return Ok(ids);
+    }
+    for id in &ids {
+        conn.execute("DELETE FROM tools_vec WHERE tool_id = ?", params![id])?;
+        conn.execute("DELETE FROM tool_embeddings WHERE tool_id = ?", params![id])?;
+        conn.execute("DELETE FROM tools WHERE id = ?", params![id])?;
+    }
+    Ok(ids)
+}
+
 pub fn get(conn: &Connection, id: &str) -> anyhow::Result<Option<ToolMeta>> {
     let mut stmt = conn.prepare(
         "SELECT id, type, name, source_repo, install_path, description, long_description,
@@ -223,5 +244,50 @@ mod tests {
         let metas = list_all(&conn).unwrap();
         assert_eq!(metas.len(), 1);
         assert_eq!(metas[0].description.as_deref(), Some("changed"));
+    }
+
+    #[test]
+    fn delete_by_source_repo_drops_only_matching_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = open(&dir.path().join("t.sqlite")).unwrap();
+        let mut a = sample("skill:a", "a");
+        a.source_repo = Some("https://github.com/owner/repo1".into());
+        let mut b = sample("skill:b", "b");
+        b.source_repo = Some("https://github.com/owner/repo1".into());
+        let c = sample("skill:c", "c"); // source_repo = None
+        upsert(&conn, &a).unwrap();
+        upsert(&conn, &b).unwrap();
+        upsert(&conn, &c).unwrap();
+        // Seed an embedding for one row to confirm cleanup. 384 dims.
+        let v = vec![0.1f32; 384];
+        crate::embeddings::upsert(&conn, "skill:a", &v).unwrap();
+
+        let deleted = delete_by_source_repo(&conn, "https://github.com/owner/repo1").unwrap();
+        assert_eq!(deleted.len(), 2);
+        assert!(deleted.contains(&"skill:a".to_string()));
+        assert!(deleted.contains(&"skill:b".to_string()));
+
+        let remaining = list_all(&conn).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, "skill:c");
+
+        let emb_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tool_embeddings WHERE tool_id = 'skill:a'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(emb_count, 0);
+    }
+
+    #[test]
+    fn delete_by_source_repo_returns_empty_when_no_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = open(&dir.path().join("t.sqlite")).unwrap();
+        upsert(&conn, &sample("skill:a", "a")).unwrap();
+        let deleted = delete_by_source_repo(&conn, "https://github.com/none/none").unwrap();
+        assert!(deleted.is_empty());
+        assert_eq!(list_all(&conn).unwrap().len(), 1);
     }
 }

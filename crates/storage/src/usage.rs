@@ -1,6 +1,6 @@
 //! `usage_events` writer + `tool_scores` aggregator. Phase 4.
 //!
-//! `insert_event` is idempotent on `uuid` — re-running `toolhub score` on the
+//! `insert_event` is idempotent on `uuid` — re-running `quiver score` on the
 //! same JSONL files MUST NOT double-count. `recompute_scores` rebuilds
 //! `tool_scores` from scratch (DELETE + INSERT inside a transaction): the
 //! table is a derived projection, so a clean rebuild is simpler than
@@ -8,8 +8,8 @@
 
 use anyhow::Context;
 use chrono::Utc;
+use quiver_core::usage::{Outcome, UsageEvent};
 use rusqlite::{Connection, OptionalExtension, params};
-use toolhub_core::usage::{Outcome, UsageEvent};
 
 /// INSERT OR IGNORE — returns true if the row was new, false if `uuid`
 /// collided with an existing event. Events without `uuid` are always inserted

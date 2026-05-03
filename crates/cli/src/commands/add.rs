@@ -1,4 +1,4 @@
-//! `toolhub add <github-url>` — Phase 5 onboarding entry point.
+//! `quiver add <github-url>` — Phase 5 onboarding entry point.
 //!
 //! Clones a GitHub repo (shallow), classifies it, parses any tool metadata
 //! it contains, persists rows + embeddings, and records the source for
@@ -6,10 +6,10 @@
 
 use chrono::Utc;
 
-use toolhub_ingestion::github_repo;
-use toolhub_ingestion::persist::persist_tools;
-use toolhub_recommender::embed::Embedder;
-use toolhub_storage::{open, sources};
+use quiver_ingestion::github_repo;
+use quiver_ingestion::persist::persist_tools;
+use quiver_recommender::embed::Embedder;
+use quiver_storage::{open, sources};
 
 use crate::db_path::default_db_path;
 

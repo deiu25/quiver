@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use toolhub_core::tool::{ToolMeta, ToolType};
+use quiver_core::tool::{ToolMeta, ToolType};
 
 use crate::tui::filter;
 

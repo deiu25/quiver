@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn open_creates_expected_tables() {
         let dir = tempfile::tempdir().unwrap();
-        let conn = open(&dir.path().join("toolhub.sqlite")).unwrap();
+        let conn = open(&dir.path().join("quiver.sqlite")).unwrap();
         let names = table_names(&conn);
         for expected in [
             "tools",
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn open_is_idempotent() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("toolhub.sqlite");
+        let path = dir.path().join("quiver.sqlite");
         let _c1 = open(&path).unwrap();
         let _c2 = open(&path).unwrap();
     }

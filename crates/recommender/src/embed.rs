@@ -39,6 +39,6 @@ fn cache_dir() -> PathBuf {
                 .map(|h| PathBuf::from(h).join(".cache"))
         })
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("toolhub")
+        .join("quiver")
         .join("models")
 }

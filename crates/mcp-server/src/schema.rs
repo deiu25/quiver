@@ -5,9 +5,9 @@
 //! Every result struct derives `serde::Serialize` so handlers can
 //! `serde_json::to_string` the value before returning a text content block.
 
+use quiver_core::tool::ToolMeta;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use toolhub_core::tool::ToolMeta;
 
 // ─── recommend ──────────────────────────────────────────────────────────────
 

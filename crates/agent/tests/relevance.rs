@@ -1,7 +1,7 @@
 //! Recommender relevance benchmark — PLAN §10 success criterion #2.
 //!
 //! Loads `benches/tasks.json` (50 synthetic tools + 50 paraphrased queries),
-//! ingests them through the same `persist_tools` pipeline `toolhub sync` uses,
+//! ingests them through the same `persist_tools` pipeline `quiver sync` uses,
 //! then runs the shared `agent::recommend::top_k` pipeline for every task.
 //! Acceptance: ≥80% top-3 hit rate.
 //!
@@ -13,12 +13,12 @@ use std::fs;
 use std::path::PathBuf;
 
 use chrono::Utc;
+use quiver_agent::recommend::top_k;
+use quiver_core::tool::{ToolMeta, ToolType};
+use quiver_ingestion::persist::persist_tools;
+use quiver_recommender::embed::Embedder;
+use quiver_storage::open;
 use serde::Deserialize;
-use toolhub_agent::recommend::top_k;
-use toolhub_core::tool::{ToolMeta, ToolType};
-use toolhub_ingestion::persist::persist_tools;
-use toolhub_recommender::embed::Embedder;
-use toolhub_storage::open;
 
 #[derive(Debug, Deserialize)]
 struct Bench {

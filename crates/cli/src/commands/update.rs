@@ -1,4 +1,4 @@
-//! `toolhub update [<source-id>]` — re-pull one or every github source.
+//! `quiver update [<source-id>]` — re-pull one or every github source.
 //!
 //! Compares the current upstream HEAD against `sources.last_commit_sha`. If
 //! the sha matches, skips the re-ingest. Otherwise re-runs the same pipeline
@@ -8,10 +8,10 @@
 use anyhow::{Context, anyhow};
 use chrono::Utc;
 
-use toolhub_ingestion::github_repo;
-use toolhub_ingestion::persist::persist_tools;
-use toolhub_recommender::embed::Embedder;
-use toolhub_storage::{open, sources};
+use quiver_ingestion::github_repo;
+use quiver_ingestion::persist::persist_tools;
+use quiver_recommender::embed::Embedder;
+use quiver_storage::{open, sources};
 
 use crate::db_path::default_db_path;
 

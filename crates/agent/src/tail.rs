@@ -4,7 +4,7 @@
 //! re-opens the file, seeks to the offset, parses any new whole lines, and
 //! advances the offset to the new EOF (or to the start of any partial trailing
 //! line). The whole-file replay logic in
-//! [`toolhub_ingestion::session_jsonl::replay`] handles ingestion-time
+//! [`quiver_ingestion::session_jsonl::replay`] handles ingestion-time
 //! aggregation; the agent loop wants per-line streaming, so this module
 //! re-uses the field-level parsing patterns but emits one `TailEvent` per
 //! recognised content block.
@@ -18,8 +18,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use quiver_ingestion::session_jsonl::map_tool_id;
 use serde_json::Value;
-use toolhub_ingestion::session_jsonl::map_tool_id;
 
 const TASK_TEXT_MAX: usize = 500;
 

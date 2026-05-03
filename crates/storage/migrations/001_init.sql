@@ -1,4 +1,4 @@
--- ToolHub schema, base tables. See PLAN.md §6.
+-- Quiver schema, base tables. See PLAN.md §6.
 -- TIMESTAMP columns hold SQLite ISO 8601 strings (UTC).
 
 CREATE TABLE tools (

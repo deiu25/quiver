@@ -8,9 +8,9 @@ use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
+use quiver_storage::{open, tools};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use toolhub_storage::{open, tools};
 
 use crate::db_path::default_db_path;
 use crate::tui::app::{App, SideEffect};

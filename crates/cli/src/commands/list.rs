@@ -1,4 +1,4 @@
-use toolhub_storage::{open, tools};
+use quiver_storage::{open, tools};
 
 use crate::db_path::default_db_path;
 
@@ -10,7 +10,7 @@ pub async fn run() -> anyhow::Result<()> {
     println!("{:<32} {:<8} description", "id", "type");
     println!("{}", "-".repeat(96));
     if metas.is_empty() {
-        println!("(empty — run `toolhub sync` to populate)");
+        println!("(empty — run `quiver sync` to populate)");
         return Ok(());
     }
     for m in metas {

@@ -1,8 +1,8 @@
-//! `toolhub digest` — markdown report over a sliding window of activity.
+//! `quiver digest` — markdown report over a sliding window of activity.
 
 use std::path::PathBuf;
 
-use toolhub_agent::digest;
+use quiver_agent::digest;
 
 use crate::db_path::default_db_path;
 

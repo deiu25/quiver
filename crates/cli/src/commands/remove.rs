@@ -1,9 +1,9 @@
-//! `toolhub remove <source-id>` — drop every tool ingested from one github
+//! `quiver remove <source-id>` — drop every tool ingested from one github
 //! source, then drop the source row itself.
 
 use anyhow::anyhow;
 
-use toolhub_storage::{fts, open, sources, tools};
+use quiver_storage::{fts, open, sources, tools};
 
 use crate::db_path::default_db_path;
 

@@ -11,10 +11,10 @@ use std::time::Duration;
 
 use chrono::Utc;
 use futures_util::StreamExt;
+use quiver_core::tool::{ToolMeta, ToolType};
+use quiver_storage::{pool, suggestions, tools};
+use quiver_web::{AppState, routes};
 use tokio::sync::OnceCell;
-use toolhub_core::tool::{ToolMeta, ToolType};
-use toolhub_storage::{pool, suggestions, tools};
-use toolhub_web::{AppState, routes};
 
 fn seed_tool(state: &AppState, id: &str) {
     let now = Utc::now();
@@ -46,7 +46,7 @@ fn seed_tool(state: &AppState, id: &str) {
 #[tokio::test]
 async fn sse_emits_event_for_inserted_suggestion() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("toolhub.sqlite");
+    let path = dir.path().join("quiver.sqlite");
     let pool = pool::open_pool(&path).unwrap();
     let state = AppState {
         pool: pool.clone(),

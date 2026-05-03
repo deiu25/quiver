@@ -2,7 +2,7 @@
 //!
 //! Phase 3 added the bare `upsert` so the MCP `add_source` stub could record
 //! a row. Phase 5 added `upsert_full` (writes `last_commit_sha`), plus `list`,
-//! `get`, and `delete` so `toolhub update`/`remove` can drive the re-pull
+//! `get`, and `delete` so `quiver update`/`remove` can drive the re-pull
 //! lifecycle.
 
 use chrono::{DateTime, Utc};

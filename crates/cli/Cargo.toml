@@ -1,5 +1,5 @@
 [package]
-name = "toolhub"
+name = "quiver"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,17 +12,17 @@ documentation = "https://github.com/deiu25/quiver"
 readme = "README.md"
 
 [[bin]]
-name = "toolhub"
+name = "quiver"
 path = "src/main.rs"
 
 [dependencies]
-toolhub-core = { path = "../core", version = "0.1.0" }
-toolhub-storage = { path = "../storage", version = "0.1.0" }
-toolhub-ingestion = { path = "../ingestion", version = "0.1.0" }
-toolhub-recommender = { path = "../recommender", version = "0.1.0" }
-toolhub-mcp-server = { path = "../mcp-server", version = "0.1.0" }
-toolhub-agent = { path = "../agent", version = "0.1.0" }
-toolhub-web = { path = "../web", version = "0.1.0" }
+quiver-core = { path = "../core", version = "0.1.0" }
+quiver-storage = { path = "../storage", version = "0.1.0" }
+quiver-ingestion = { path = "../ingestion", version = "0.1.0" }
+quiver-recommender = { path = "../recommender", version = "0.1.0" }
+quiver-mcp-server = { path = "../mcp-server", version = "0.1.0" }
+quiver-agent = { path = "../agent", version = "0.1.0" }
+quiver-web = { path = "../web", version = "0.1.0" }
 clap = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }

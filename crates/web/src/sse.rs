@@ -78,11 +78,11 @@ pub async fn suggestions_stream(
             let rows = match polled {
                 Ok(Ok(rows)) => rows,
                 Ok(Err(err)) => {
-                    tracing::warn!(target: "toolhub::web::sse", "poll: {err:#}");
+                    tracing::warn!(target: "quiver::web::sse", "poll: {err:#}");
                     Vec::new()
                 },
                 Err(err) => {
-                    tracing::warn!(target: "toolhub::web::sse", "join: {err:#}");
+                    tracing::warn!(target: "quiver::web::sse", "join: {err:#}");
                     Vec::new()
                 },
             };
@@ -94,7 +94,7 @@ pub async fn suggestions_stream(
                 let html = match (SuggestionRowTpl { row }).render() {
                     Ok(h) => h,
                     Err(err) => {
-                        tracing::warn!(target: "toolhub::web::sse", "render: {err:#}");
+                        tracing::warn!(target: "quiver::web::sse", "render: {err:#}");
                         continue;
                     },
                 };

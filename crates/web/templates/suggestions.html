@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Suggestions · ToolHub{% endblock %}
+{% block title %}Suggestions · Quiver{% endblock %}
 {% block content %}
 <h1>Suggestions <span class="muted">live</span></h1>
 <p class="muted">
@@ -15,7 +15,7 @@
      hx-swap="afterbegin">
   {% if rows.is_empty() %}
     <p class="muted" id="empty-feed">
-      No suggestions yet. Run <code>toolhub agent</code> in another pane —
+      No suggestions yet. Run <code>quiver agent</code> in another pane —
       new rows will stream in here.
     </p>
   {% else %}

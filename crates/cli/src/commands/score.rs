@@ -1,4 +1,4 @@
-//! `toolhub score` — replay every Claude Code session JSONL into
+//! `quiver score` — replay every Claude Code session JSONL into
 //! `usage_events`, then rebuild `tool_scores`.
 //!
 //! Idempotent: `usage_events.uuid` is UNIQUE (migration 005) so re-running on
@@ -11,8 +11,8 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use anyhow::Context;
-use toolhub_ingestion::session_jsonl;
-use toolhub_storage::{open, usage};
+use quiver_ingestion::session_jsonl;
+use quiver_storage::{open, usage};
 use walkdir::WalkDir;
 
 use crate::db_path::default_db_path;

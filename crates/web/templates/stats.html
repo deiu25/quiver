@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Stats · ToolHub{% endblock %}
+{% block title %}Stats · Quiver{% endblock %}
 {% block content %}
 <h1>Stats</h1>
 
@@ -14,7 +14,7 @@
 
 <h2>Top tools (success&nbsp;×&nbsp;log&nbsp;samples)</h2>
 {% if top_tools.is_empty() %}
-  <p class="muted">No score rows yet — run <code>toolhub agent</code> + <code>toolhub score</code>.</p>
+  <p class="muted">No score rows yet — run <code>quiver agent</code> + <code>quiver score</code>.</p>
 {% else %}
 <table>
   <thead>

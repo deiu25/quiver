@@ -8,9 +8,9 @@ use axum::extract::State;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use chrono::{Duration, Utc};
+use quiver_core::tool::ToolMeta;
+use quiver_storage::{scores, suggestions, tools};
 use rusqlite::Connection;
-use toolhub_core::tool::ToolMeta;
-use toolhub_storage::{scores, suggestions, tools};
 
 use crate::error::{WebError, WebResult};
 use crate::state::AppState;

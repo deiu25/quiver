@@ -1,6 +1,6 @@
 <div align="center">
 
-# ToolHub
+# Quiver
 
 **Local tool registry, recommender, and background agent for Claude Code.**
 
@@ -13,11 +13,11 @@
 
 ---
 
-## Why ToolHub?
+## Why Quiver?
 
 Claude Code lets you install hundreds of skills, plugins, and MCP servers. After a few months you have so many that you can't remember what you have, which one fits the task at hand, and which ones you never actually use. The CLI gives you no way to search, rank, or prune them.
 
-ToolHub is a single static binary that catalogs every tool on your machine, embeds them into a local SQLite database with `sqlite-vec` + FTS5, and recommends the best three for any task in <50 ms. It plugs into Claude Code as an MCP server (so you can ask for recommendations mid-session), and a background agent watches your sessions to learn which tools you actually accept — feeding that signal back into the ranker.
+Quiver is a single static binary that catalogs every tool on your machine, embeds them into a local SQLite database with `sqlite-vec` + FTS5, and recommends the best three for any task in <50 ms. It plugs into Claude Code as an MCP server (so you can ask for recommendations mid-session), and a background agent watches your sessions to learn which tools you actually accept — feeding that signal back into the ranker.
 
 No telemetry. No cloud. No API keys. The embedding model runs on CPU and weighs ~30 MB.
 
@@ -30,22 +30,22 @@ No telemetry. No cloud. No API keys. The embedding model runs on CPU and weighs 
 - **Mid-session integration** — stdio MCP server (`rmcp` 1.6) exposes 5 tools to Claude Code while you work.
 - **Self-improving** — replays session JSONL into `usage_events`, scores tools by outcome, boosts hits that worked.
 - **Background agent** — tails `~/.claude/projects/*.jsonl`, drops a hint markdown per session, tracks which suggestions you actually invoke.
-- **GitHub onboarding** — `toolhub add <url>` clones any tool repo, auto-detects its kind, and ingests its tools.
+- **GitHub onboarding** — `quiver add <url>` clones any tool repo, auto-detects its kind, and ingests its tools.
 - **Interactive TUI** — `ratatui` dashboard with search, type filter, and `$EDITOR` jump.
-- **Local web UI** — `toolhub serve` opens a loopback dashboard with catalog browser, debounced recommend box, live SSE suggestions feed, and stats. Same single binary; htmx + askama, no Node, no build step.
+- **Local web UI** — `quiver serve` opens a loopback dashboard with catalog browser, debounced recommend box, live SSE suggestions feed, and stats. Same single binary; htmx + askama, no Node, no build step.
 
 ---
 
 ## Demo
 
 ```console
-$ toolhub recommend "extract design tokens from a marketing page"
+$ quiver recommend "extract design tokens from a marketing page"
   score   id                                 description
   0.842   skill:design-md                    Generate semantic design system
   0.721   skill:enhance-prompt               Transform vague UI ideas
   0.633   cli:designlang                     Grade designs from URL
 
-$ toolhub stats --top 3
+$ quiver stats --top 3
  tool_id                       success_rate   sample_size
  skill:caveman                  92%            38
  skill:design-md                88%            17
@@ -60,7 +60,7 @@ $ toolhub stats --top 3
 git clone https://github.com/deiu25/quiver.git
 cd quiver
 cargo build --release
-cp target/release/toolhub ~/.local/bin/
+cp target/release/quiver ~/.local/bin/
 ```
 
 Or install directly with cargo:
@@ -69,19 +69,19 @@ Or install directly with cargo:
 cargo install --path crates/cli
 ```
 
-**Requirements:** Rust stable (2024 edition). On first `sync`, ToolHub downloads the BAAI/bge-small-en-v1.5 model (~30 MB) into `$XDG_CACHE_HOME/fastembed`.
+**Requirements:** Rust stable (2024 edition). On first `sync`, Quiver downloads the BAAI/bge-small-en-v1.5 model (~30 MB) into `$XDG_CACHE_HOME/fastembed`.
 
 ---
 
 ## Quick start
 
 ```bash
-toolhub sync                                              # scan + index every tool
-toolhub recommend "extract design tokens"                 # top-3 hybrid search
-toolhub tui                                               # browse interactively
-toolhub serve --open                                      # local web UI on 127.0.0.1:7777
-toolhub add https://github.com/google-labs-code/stitch    # onboard a new source
-toolhub agent                                             # background hint writer
+quiver sync                                              # scan + index every tool
+quiver recommend "extract design tokens"                 # top-3 hybrid search
+quiver tui                                               # browse interactively
+quiver serve --open                                      # local web UI on 127.0.0.1:7777
+quiver add https://github.com/google-labs-code/stitch    # onboard a new source
+quiver agent                                             # background hint writer
 ```
 
 ---
@@ -91,7 +91,7 @@ toolhub agent                                             # background hint writ
 Append to `~/.claude/mcp_servers.json`:
 
 ```json
-{ "mcpServers": { "toolhub": { "command": "toolhub", "args": ["mcp"] } } }
+{ "mcpServers": { "quiver": { "command": "quiver", "args": ["mcp"] } } }
 ```
 
 Restart Claude Code. Five MCP tools become available mid-session:
@@ -112,19 +112,19 @@ Restart Claude Code. Five MCP tools become available mid-session:
 
 | Command | Purpose |
 |---|---|
-| `toolhub sync` | Re-scan `~/.claude/skills`, `~/.claude/plugins`, `~/.claude/mcp_servers.json`, etc. Re-embeds every tool. |
-| `toolhub list` | Print every catalogued tool with id, kind, description. |
-| `toolhub recommend <task>` | Hybrid search + success-rate rerank. Returns top 3. |
-| `toolhub tui` | Interactive dashboard (`/` = search, `Tab` = type filter, `e` = open in `$EDITOR`, `q` = quit). |
-| `toolhub info <id>` | Print full metadata for one tool. _(stub — coming soon)_ |
+| `quiver sync` | Re-scan `~/.claude/skills`, `~/.claude/plugins`, `~/.claude/mcp_servers.json`, etc. Re-embeds every tool. |
+| `quiver list` | Print every catalogued tool with id, kind, description. |
+| `quiver recommend <task>` | Hybrid search + success-rate rerank. Returns top 3. |
+| `quiver tui` | Interactive dashboard (`/` = search, `Tab` = type filter, `e` = open in `$EDITOR`, `q` = quit). |
+| `quiver info <id>` | Print full metadata for one tool. _(stub — coming soon)_ |
 
 ### Usage tracking
 
 | Command | Purpose |
 |---|---|
-| `toolhub score [--sessions-dir <path>]` | Replay session JSONL into `usage_events`, rebuild `tool_scores`. Idempotent on `tool_use.uuid`. |
-| `toolhub stats [--tool <id>] [--top N] [--json]` | List by success rate, or detail one tool's recent events. |
-| `toolhub dead-weight [--days N]` | Tools with zero usage in the last N days (default 30). |
+| `quiver score [--sessions-dir <path>]` | Replay session JSONL into `usage_events`, rebuild `tool_scores`. Idempotent on `tool_use.uuid`. |
+| `quiver stats [--tool <id>] [--top N] [--json]` | List by success rate, or detail one tool's recent events. |
+| `quiver dead-weight [--days N]` | Tools with zero usage in the last N days (default 30). |
 
 Outcome heuristic per `tool_use` event: `success` (clean `tool_result`), `failure` (`is_error: true`), `abandoned` (no result before EOF), or `unknown`.
 
@@ -132,28 +132,28 @@ Outcome heuristic per `tool_use` event: `success` (clean `tool_result`), `failur
 
 | Command | Purpose |
 |---|---|
-| `toolhub add <url>` | Clone, auto-detect kind, ingest tools, register source with `last_commit_sha`. Accepts `https://`, `gh:`, or `git@` URLs. |
-| `toolhub update [<source>]` | Re-pull one or every registered GitHub source. Skips no-op updates by SHA. |
-| `toolhub remove <source>` | Drop every tool from `source`, then delete the row. FK cascades the embedder index. |
+| `quiver add <url>` | Clone, auto-detect kind, ingest tools, register source with `last_commit_sha`. Accepts `https://`, `gh:`, or `git@` URLs. |
+| `quiver update [<source>]` | Re-pull one or every registered GitHub source. Skips no-op updates by SHA. |
+| `quiver remove <source>` | Drop every tool from `source`, then delete the row. FK cascades the embedder index. |
 
 ### Background agent
 
 | Command | Purpose |
 |---|---|
-| `toolhub agent [--sessions-dir <path>] [--hints-dir <path>]` | Foreground watcher. On every new user message: run the recommender, atomically write top-3 to `<hints-dir>/<session>.md`, log the top-1 to `agent_suggestions`. Acceptance flips when you invoke the suggested tool within 60 min. `recompute_scores` runs every 60 s / 50 events. Wrap with tmux/systemd for long runs. |
-| `toolhub digest --days N [--out <path>]` | Markdown report: top tools, suggestion acceptance rate, dead weight, new arrivals. |
+| `quiver agent [--sessions-dir <path>] [--hints-dir <path>]` | Foreground watcher. On every new user message: run the recommender, atomically write top-3 to `<hints-dir>/<session>.md`, log the top-1 to `agent_suggestions`. Acceptance flips when you invoke the suggested tool within 60 min. `recompute_scores` runs every 60 s / 50 events. Wrap with tmux/systemd for long runs. |
+| `quiver digest --days N [--out <path>]` | Markdown report: top tools, suggestion acceptance rate, dead weight, new arrivals. |
 
 ### MCP server
 
 | Command | Purpose |
 |---|---|
-| `toolhub mcp` | Run the stdio MCP server. JSON-RPC on stdin/stdout, logs on stderr. Built on `rmcp` 1.6 with `tool_router` macros. |
+| `quiver mcp` | Run the stdio MCP server. JSON-RPC on stdin/stdout, logs on stderr. Built on `rmcp` 1.6 with `tool_router` macros. |
 
 ### Local web UI
 
 | Command | Purpose |
 |---|---|
-| `toolhub serve [--port 7777] [--host 127.0.0.1] [--open]` | Loopback-only `axum` server. Five pages: `/catalog` (filter/search/detail), `/recommend` (debounced top-3), `/suggestions` (live SSE feed of agent suggestions, in-place acceptance flips), `/stats` (acceptance %, top tools, dead weight, sources), `/sources` (one-click rescan). Reads the same SQLite DB the CLI uses; embedder loads lazily on a blocking thread, so first `/api/recommend` call blocks ~3-5 s while the model warms. Run alongside `toolhub agent` in a separate pane to watch live suggestions. |
+| `quiver serve [--port 7777] [--host 127.0.0.1] [--open]` | Loopback-only `axum` server. Five pages: `/catalog` (filter/search/detail), `/recommend` (debounced top-3), `/suggestions` (live SSE feed of agent suggestions, in-place acceptance flips), `/stats` (acceptance %, top tools, dead weight, sources), `/sources` (one-click rescan). Reads the same SQLite DB the CLI uses; embedder loads lazily on a blocking thread, so first `/api/recommend` call blocks ~3-5 s while the model warms. Run alongside `quiver agent` in a separate pane to watch live suggestions. |
 
 ---
 
@@ -161,9 +161,9 @@ Outcome heuristic per `tool_use` event: `success` (clean `tool_result`), `failur
 
 | Variable / path | Default | Purpose |
 |---|---|---|
-| `$XDG_DATA_HOME/toolhub/toolhub.sqlite` | `~/.local/share/toolhub/` | Main SQLite DB. |
+| `$XDG_DATA_HOME/quiver/quiver.sqlite` | `~/.local/share/quiver/` | Main SQLite DB. |
 | `$XDG_CACHE_HOME/fastembed/` | `~/.cache/fastembed/` | Embedding model cache. |
-| `~/.claude/projects/` | (Claude Code default) | Sessions root watched by `toolhub agent`. Override with `--sessions-dir`. |
+| `~/.claude/projects/` | (Claude Code default) | Sessions root watched by `quiver agent`. Override with `--sessions-dir`. |
 | `~/.claude/hints/` | _agent default_ | Per-session hint markdown output. Override with `--hints-dir`. |
 | `RUST_LOG` | `info,refinery_core=warn` | Log level. |
 
@@ -189,7 +189,7 @@ Outcome heuristic per `tool_use` event: `success` (clean `tool_result`), `failur
 
 ## Architecture
 
-Workspace with eight crates: `core` (domain types), `storage` (SQLite + migrations + r2d2 pool), `ingestion` (parsers, onboarding, shared `discover_all` + `run_sync` + `persist_tools`), `recommender` (embed + hybrid search + rerank), `mcp-server`, `agent` (background loop + shared `top_k`), `web` (axum + askama + htmx web UI), and `cli` (binary entry point named `toolhub`).
+Workspace with eight crates: `core` (domain types), `storage` (SQLite + migrations + r2d2 pool), `ingestion` (parsers, onboarding, shared `discover_all` + `run_sync` + `persist_tools`), `recommender` (embed + hybrid search + rerank), `mcp-server`, `agent` (background loop + shared `top_k`), `web` (axum + askama + htmx web UI), and `cli` (binary entry point named `quiver`).
 
 Eight tables: `tools`, `usage_events`, `tool_scores`, `sources`, `tools_fts` (FTS5), `tools_vec` (vec0), `embeddings`, `agent_suggestions`. Six migrations.
 
@@ -204,16 +204,16 @@ crates/
   mcp-server/    rmcp 1.6 stdio server
   agent/         daily-task agent loop
   web/           axum + askama + htmx local web UI (rust-embed static assets)
-  cli/           binary entry point (name: toolhub)
+  cli/           binary entry point (name: quiver)
 -->
 
 ---
 
 ## Roadmap
 
-Phase 7 (local web UI on `toolhub serve`) shipped — see the **Local web UI** command above. Originally scoped as a Tauri 2 desktop app; pivoted to an axum + htmx loopback dashboard to keep the single-binary story.
+Phase 7 (local web UI on `quiver serve`) shipped — see the **Local web UI** command above. Originally scoped as a Tauri 2 desktop app; pivoted to an axum + htmx loopback dashboard to keep the single-binary story.
 
-The v0.1 hardening pass landed CI (fmt + clippy + workspace tests on every push), a 50-task recommender relevance benchmark with a ≥80% top-3 acceptance gate (see [Benchmark](#benchmark)), and crates.io-ready packaging metadata on the `toolhub` binary crate.
+The v0.1 hardening pass landed CI (fmt + clippy + workspace tests on every push), a 50-task recommender relevance benchmark with a ≥80% top-3 acceptance gate (see [Benchmark](#benchmark)), and crates.io-ready packaging metadata on the `quiver` binary crate.
 
 Three deferred polish items (orthogonal, will land any time): cost extraction from JSONL `usage` field, optional Anthropic-SDK README distillation in `add`, and a Haiku 4.5 task classifier in front of the embedder.
 
@@ -223,10 +223,10 @@ Optional future work: a thin browser extension that talks to the same `/api/*` r
 
 ## Benchmark
 
-Recommender relevance is gated by a synthetic 50-task / 50-tool benchmark (`benches/tasks.json`) that ingests through the same `persist_tools` pipeline `toolhub sync` uses, runs the shared `top_k` recommender, and asserts a ≥80% top-3 hit rate. Each task is paraphrased away from the corresponding tool's description so the gate exercises FTS5 BM25 + sqlite-vec cosine, not exact-match.
+Recommender relevance is gated by a synthetic 50-task / 50-tool benchmark (`benches/tasks.json`) that ingests through the same `persist_tools` pipeline `quiver sync` uses, runs the shared `top_k` recommender, and asserts a ≥80% top-3 hit rate. Each task is paraphrased away from the corresponding tool's description so the gate exercises FTS5 BM25 + sqlite-vec cosine, not exact-match.
 
 ```bash
-cargo test -p toolhub-agent --test relevance --release -- --nocapture
+cargo test -p quiver-agent --test relevance --release -- --nocapture
 ```
 
 First run downloads BAAI/bge-small-en-v1.5 (~30 MB) into `$XDG_CACHE_HOME/fastembed/`. Subsequent runs reuse the cache. CI caches that path under the key `fastembed-bge-small-en-v1.5`. Latency budget (<50 ms per `recommend` over 60 tools) is verified manually for now; criterion benches will land alongside the next perf pass.
@@ -239,10 +239,10 @@ First run downloads BAAI/bge-small-en-v1.5 (~30 MB) into `$XDG_CACHE_HOME/fastem
 cargo build                                 # debug
 cargo build --release                       # release, ~30 s cold
 cargo test --workspace                      # all tests (138+)
-cargo test -p toolhub-mcp-server            # MCP handler tests
-cargo test -p toolhub-web --test routes     # web route integration tests
-cargo test -p toolhub-web --test sse        # live SSE end-to-end test
-cargo test -p toolhub --bins                # TUI logic tests
+cargo test -p quiver-mcp-server            # MCP handler tests
+cargo test -p quiver-web --test routes     # web route integration tests
+cargo test -p quiver-web --test sse        # live SSE end-to-end test
+cargo test -p quiver --bins                # TUI logic tests
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
@@ -251,8 +251,8 @@ cargo fmt --all -- --check
 
 ## Limitations
 
-- `toolhub info <id>` is currently a stub.
-- `toolhub agent` runs in the foreground — no daemon mode yet, wrap with `tmux` or `systemd`.
+- `quiver info <id>` is currently a stub.
+- `quiver agent` runs in the foreground — no daemon mode yet, wrap with `tmux` or `systemd`.
 - Linux + macOS only for now; Windows is untested (notify-rs supports it but no CI gate).
 - No prebuilt binaries yet — `cargo install --path crates/cli` from a clone is the supported install path until v0.1 lands on crates.io and GitHub Releases.
 

@@ -1,8 +1,8 @@
 //! Integration tests for the read-only HTML routes.
 //!
-//! Each test opens a fresh tempdir DB via [`toolhub_storage::pool::open_pool`],
+//! Each test opens a fresh tempdir DB via [`quiver_storage::pool::open_pool`],
 //! seeds a couple of tools, builds the live axum router via
-//! [`toolhub_web::routes::router`], and exercises a single endpoint with
+//! [`quiver_web::routes::router`], and exercises a single endpoint with
 //! `Router::oneshot`. No real Embedder is loaded — routes that need one
 //! (`/api/recommend`, `/api/sources/sync`) are not exercised here.
 
@@ -11,10 +11,10 @@ use std::sync::Arc;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use chrono::Utc;
+use quiver_core::tool::{ToolMeta, ToolType};
+use quiver_storage::{pool, suggestions, tools};
+use quiver_web::{AppState, routes};
 use tokio::sync::OnceCell;
-use toolhub_core::tool::{ToolMeta, ToolType};
-use toolhub_storage::{pool, suggestions, tools};
-use toolhub_web::{AppState, routes};
 use tower::util::ServiceExt;
 
 fn sample(id: &str, name: &str, ttype: ToolType, desc: &str) -> ToolMeta {
@@ -44,7 +44,7 @@ fn sample(id: &str, name: &str, ttype: ToolType, desc: &str) -> ToolMeta {
 
 fn build_state(seed: &[ToolMeta]) -> (tempfile::TempDir, AppState) {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("toolhub.sqlite");
+    let path = dir.path().join("quiver.sqlite");
     let pool = pool::open_pool(&path).unwrap();
     {
         let conn = pool.get().unwrap();

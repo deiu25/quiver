@@ -24,7 +24,7 @@ impl IntoResponse for WebError {
             )
                 .into_response(),
             WebError::Internal(err) => {
-                tracing::error!(target: "toolhub::web", "{err:#}");
+                tracing::error!(target: "quiver::web", "{err:#}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     format!("internal error: {err}"),

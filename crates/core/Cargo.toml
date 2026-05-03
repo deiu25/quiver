@@ -1,10 +1,10 @@
 [package]
-name = "toolhub-core"
+name = "quiver-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Domain types and traits for the toolhub workspace"
+description = "Domain types and traits for the quiver workspace"
 
 [dependencies]
 serde = { workspace = true }

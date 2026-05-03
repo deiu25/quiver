@@ -4,8 +4,8 @@ use std::path::Path;
 
 use anyhow::Context;
 use chrono::{DateTime, Utc};
+use quiver_core::tool::{ToolMeta, ToolType};
 use serde::Deserialize;
-use toolhub_core::tool::{ToolMeta, ToolType};
 
 #[derive(Debug, Deserialize)]
 struct InstalledPlugins {

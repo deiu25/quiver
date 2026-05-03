@@ -1,4 +1,4 @@
-//! ToolHub MCP server (stdio transport, rmcp `tool_router` macro).
+//! Quiver MCP server (stdio transport, rmcp `tool_router` macro).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -13,13 +13,13 @@ use rmcp::transport::stdio;
 use rmcp::{tool, tool_router};
 use rusqlite::Connection;
 
-use toolhub_ingestion::github_repo;
-use toolhub_recommender::embed::Embedder;
-use toolhub_recommender::params::{
+use quiver_ingestion::github_repo;
+use quiver_recommender::embed::Embedder;
+use quiver_recommender::params::{
     COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
 };
-use toolhub_recommender::search;
-use toolhub_storage::{embeddings, fts, open, scores, sources, tools, usage};
+use quiver_recommender::search;
+use quiver_storage::{embeddings, fts, open, scores, sources, tools, usage};
 
 use crate::schema::{
     AddSourceParams, AddSourceResult, InfoParams, RecommendHit, RecommendParams, SearchHit,
@@ -29,8 +29,8 @@ use crate::schema::{
 /// 2 KB upper bound on free-text task input fed to the embedder.
 const TASK_INPUT_LIMIT: usize = 2048;
 
-/// Resolve the default ToolHub SQLite path: `$XDG_DATA_HOME/toolhub/toolhub.sqlite`,
-/// falling back to `$HOME/.local/share/toolhub/toolhub.sqlite`.
+/// Resolve the default Quiver SQLite path: `$XDG_DATA_HOME/quiver/quiver.sqlite`,
+/// falling back to `$HOME/.local/share/quiver/quiver.sqlite`.
 pub fn default_db_path() -> anyhow::Result<PathBuf> {
     let base = std::env::var("XDG_DATA_HOME")
         .map(PathBuf::from)
@@ -41,10 +41,10 @@ pub fn default_db_path() -> anyhow::Result<PathBuf> {
                 .map(|h| PathBuf::from(h).join(".local/share"))
         })
         .ok_or_else(|| anyhow!("cannot resolve XDG_DATA_HOME or HOME"))?;
-    Ok(base.join("toolhub").join("toolhub.sqlite"))
+    Ok(base.join("quiver").join("quiver.sqlite"))
 }
 
-/// Shared server state. Wrapped in `Arc<…>` inside `ToolHubServer` so each
+/// Shared server state. Wrapped in `Arc<…>` inside `QuiverServer` so each
 /// rmcp dispatch only clones the wrapper. The embedder is lazy: tools that
 /// don't need it (search/info/add_source/usage_stats) never pay the
 /// fastembed cold-init cost.
@@ -54,11 +54,11 @@ pub struct ServerState {
 }
 
 #[derive(Clone)]
-pub struct ToolHubServer {
+pub struct QuiverServer {
     state: std::sync::Arc<ServerState>,
 }
 
-impl ToolHubServer {
+impl QuiverServer {
     /// Build a server backed by the user's default DB. Embedder loads lazily
     /// on the first `recommend` call.
     pub fn new() -> anyhow::Result<Self> {
@@ -98,7 +98,7 @@ fn err(e: anyhow::Error) -> ErrorData {
 }
 
 #[tool_router(server_handler)]
-impl ToolHubServer {
+impl QuiverServer {
     #[tool(
         description = "Recommend tools for a free-text task using hybrid vec+FTS search. \
                        Returns top-k tools (default 3) ordered by combined score."
@@ -333,7 +333,7 @@ impl ToolHubServer {
         let result = UsageStatsResult {
             rows,
             recent_events,
-            note: "Run `toolhub score` to populate from session JSONL.",
+            note: "Run `quiver score` to populate from session JSONL.",
         };
         serde_json::to_string(&result).map_err(|e| err(anyhow!(e)))
     }
@@ -341,7 +341,7 @@ impl ToolHubServer {
 
 /// Concatenate name + description + triggers — same blend `sync` and `add` use,
 /// so the embedding produced by `add_source` matches what `recommend` expects.
-fn embed_text_for(m: &toolhub_core::tool::ToolMeta) -> String {
+fn embed_text_for(m: &quiver_core::tool::ToolMeta) -> String {
     let desc = m.description.as_deref().unwrap_or("");
     let triggers = m.triggers.join(", ");
     format!("{}\n{}\n{}", m.name, desc, triggers)
@@ -349,7 +349,7 @@ fn embed_text_for(m: &toolhub_core::tool::ToolMeta) -> String {
 
 /// Run the server on stdio. Blocks until the client disconnects.
 pub async fn serve_stdio() -> anyhow::Result<()> {
-    let server = ToolHubServer::new()?;
+    let server = QuiverServer::new()?;
     let service = server.serve(stdio()).await.context("serve stdio")?;
     service
         .waiting()
@@ -362,7 +362,7 @@ pub async fn serve_stdio() -> anyhow::Result<()> {
 mod tests {
     use super::*;
     use chrono::Utc;
-    use toolhub_core::tool::{ToolMeta, ToolType};
+    use quiver_core::tool::{ToolMeta, ToolType};
 
     fn sample_meta(id: &str, name: &str) -> ToolMeta {
         let now = Utc::now();
@@ -386,10 +386,10 @@ mod tests {
         }
     }
 
-    fn make_server() -> (ToolHubServer, tempfile::TempDir) {
+    fn make_server() -> (QuiverServer, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         let conn = open(&dir.path().join("t.sqlite")).unwrap();
-        (ToolHubServer::from_conn(conn), dir)
+        (QuiverServer::from_conn(conn), dir)
     }
 
     #[test]
@@ -476,7 +476,7 @@ mod tests {
             .unwrap();
         let v: serde_json::Value = serde_json::from_str(&out).unwrap();
         assert!(v["rows"].as_array().unwrap().is_empty());
-        assert!(v["note"].as_str().unwrap().contains("toolhub score"));
+        assert!(v["note"].as_str().unwrap().contains("quiver score"));
         // recent_events is skipped when empty.
         assert!(
             v.get("recent_events").is_none() || v["recent_events"].as_array().unwrap().is_empty()
@@ -486,7 +486,7 @@ mod tests {
     #[test]
     fn usage_stats_includes_recent_events_for_tool_filter() {
         use chrono::{TimeZone, Utc};
-        use toolhub_core::usage::{Outcome, UsageEvent};
+        use quiver_core::usage::{Outcome, UsageEvent};
 
         let (server, _dir) = make_server();
         {

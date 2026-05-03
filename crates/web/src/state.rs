@@ -2,10 +2,10 @@
 
 use std::sync::Arc;
 
+use quiver_recommender::embed::Embedder;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use tokio::sync::OnceCell;
-use toolhub_recommender::embed::Embedder;
 
 /// `OnceCell` cell for the lazy-loaded fastembed model. Built on a blocking
 /// thread at startup; handlers read it via [`AppState::embedder`].

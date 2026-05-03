@@ -6,7 +6,7 @@ operation:
 1. Download the new release into `static/` overwriting the old file.
 2. Run `sha256sum static/<file>` and update the hash below.
 3. Update the version line.
-4. Re-run `cargo test -p toolhub-web` and exercise the affected pages manually.
+4. Re-run `cargo test -p quiver-web` and exercise the affected pages manually.
 
 | Asset           | Version | Source                                                     | SHA-256                                                              |
 | --------------- | ------- | ---------------------------------------------------------- | -------------------------------------------------------------------- |

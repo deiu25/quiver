@@ -1,13 +1,13 @@
 [package]
-name = "toolhub-storage"
+name = "quiver-storage"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "SQLite + sqlite-vec + FTS5 storage layer with refinery migrations and r2d2 pool for toolhub"
+description = "SQLite + sqlite-vec + FTS5 storage layer with refinery migrations and r2d2 pool for quiver"
 
 [dependencies]
-toolhub-core = { path = "../core", version = "0.1.0" }
+quiver-core = { path = "../core", version = "0.1.0" }
 anyhow = { workspace = true }
 rusqlite = { workspace = true }
 refinery = { workspace = true }

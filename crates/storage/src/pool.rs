@@ -1,4 +1,4 @@
-//! r2d2 connection pool for the ToolHub SQLite DB.
+//! r2d2 connection pool for the Quiver SQLite DB.
 //!
 //! The pool is wired so every connection it hands out has the `sqlite-vec`
 //! extension auto-loaded (via [`crate::ensure_vec_extension`]) and finds the
@@ -38,7 +38,7 @@ mod tests {
     #[test]
     fn open_pool_creates_db_and_runs_migrations() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("toolhub.sqlite");
+        let path = dir.path().join("quiver.sqlite");
 
         let pool = open_pool(&path).unwrap();
         let conn = pool.get().unwrap();
@@ -73,7 +73,7 @@ mod tests {
     #[test]
     fn open_pool_is_idempotent() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("toolhub.sqlite");
+        let path = dir.path().join("quiver.sqlite");
 
         let _p1 = open_pool(&path).unwrap();
         let _p2 = open_pool(&path).unwrap();
@@ -82,7 +82,7 @@ mod tests {
     #[test]
     fn pooled_connection_can_run_vec_extension_query() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("toolhub.sqlite");
+        let path = dir.path().join("quiver.sqlite");
 
         let pool = open_pool(&path).unwrap();
         let conn = pool.get().unwrap();
@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn pool_hands_out_independent_connections() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("toolhub.sqlite");
+        let path = dir.path().join("quiver.sqlite");
 
         let pool = open_pool(&path).unwrap();
         let c1 = pool.get().unwrap();

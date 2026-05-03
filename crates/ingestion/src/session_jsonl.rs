@@ -13,7 +13,7 @@
 //! All other event types (queue-operation, hook_*, attachment, …) are ignored.
 //! Built-in tools (Bash, Read, Edit, Write, Grep, Glob, TodoWrite, ToolSearch,
 //! ExitPlanMode, NotebookEdit, WebFetch, WebSearch) are NOT catalogued by
-//! ToolHub; we skip their events. Only `Skill` invocations and `mcp__*__*`
+//! Quiver; we skip their events. Only `Skill` invocations and `mcp__*__*`
 //! tool calls are mapped to `tool_id` and emitted.
 
 use std::collections::HashMap;
@@ -23,8 +23,8 @@ use std::path::Path;
 
 use anyhow::Context;
 use chrono::{DateTime, Utc};
+use quiver_core::usage::{Outcome, UsageEvent};
 use serde_json::Value;
-use toolhub_core::usage::{Outcome, UsageEvent};
 
 const TASK_TEXT_MAX: usize = 500;
 
@@ -62,7 +62,7 @@ const BUILTIN_TOOLS: &[&str] = &[
     "CronList",
 ];
 
-/// Map a JSONL `tool_use.name` (+ `input` for `Skill`) to a ToolHub `tool_id`.
+/// Map a JSONL `tool_use.name` (+ `input` for `Skill`) to a Quiver `tool_id`.
 /// Returns `None` for built-ins or shapes we don't understand.
 pub fn map_tool_id(name: &str, input: &Value) -> Option<String> {
     if BUILTIN_TOOLS.contains(&name) {

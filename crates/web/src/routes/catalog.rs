@@ -6,9 +6,9 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
+use quiver_core::tool::ToolType;
+use quiver_storage::{scores, tools};
 use serde::Deserialize;
-use toolhub_core::tool::ToolType;
-use toolhub_storage::{scores, tools};
 
 use crate::error::{WebError, WebResult};
 use crate::state::AppState;
@@ -144,7 +144,7 @@ fn load_tools(
     Ok(out)
 }
 
-fn text_haystack(t: &toolhub_core::tool::ToolMeta) -> String {
+fn text_haystack(t: &quiver_core::tool::ToolMeta) -> String {
     let mut s = String::with_capacity(256);
     s.push_str(&t.name);
     s.push(' ');

@@ -1,4 +1,4 @@
-//! ToolHub web UI — local dashboard served by `toolhub serve`.
+//! Quiver web UI — local dashboard served by `quiver serve`.
 //!
 //! Single binary, single crate, single static-asset bundle. axum on
 //! 127.0.0.1, askama-rendered HTML, htmx for interactivity, SSE for the
@@ -39,7 +39,7 @@ pub async fn serve(cfg: WebConfig) -> anyhow::Result<()> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("create parent dir for {}", cfg.db_path.display()))?;
     }
-    let pool = toolhub_storage::pool::open_pool(&cfg.db_path)
+    let pool = quiver_storage::pool::open_pool(&cfg.db_path)
         .with_context(|| format!("open pool {}", cfg.db_path.display()))?;
 
     let embedder: EmbedderCell = Arc::new(OnceCell::new());
@@ -53,8 +53,8 @@ pub async fn serve(cfg: WebConfig) -> anyhow::Result<()> {
         .await
         .with_context(|| format!("bind {addr}"))?;
     let bound = listener.local_addr().unwrap_or(addr);
-    tracing::info!(target: "toolhub::web", "listening on http://{bound}");
-    eprintln!("toolhub serve listening on http://{bound}");
+    tracing::info!(target: "quiver::web", "listening on http://{bound}");
+    eprintln!("quiver serve listening on http://{bound}");
 
     if cfg.open {
         let url = format!("http://{bound}");
@@ -63,7 +63,7 @@ pub async fn serve(cfg: WebConfig) -> anyhow::Result<()> {
             // races us to /catalog.
             std::thread::sleep(Duration::from_millis(200));
             if let Err(err) = webbrowser::open(&url) {
-                tracing::warn!(target: "toolhub::web", "open browser: {err:#}");
+                tracing::warn!(target: "quiver::web", "open browser: {err:#}");
             }
         });
     }
@@ -76,20 +76,20 @@ pub async fn serve(cfg: WebConfig) -> anyhow::Result<()> {
 }
 
 fn spawn_embedder_init(cell: EmbedderCell) {
-    tokio::task::spawn_blocking(move || match toolhub_recommender::embed::Embedder::new() {
+    tokio::task::spawn_blocking(move || match quiver_recommender::embed::Embedder::new() {
         Ok(emb) => {
             if cell.set(Arc::new(emb)).is_err() {
-                tracing::warn!(target: "toolhub::web", "embedder cell already set");
+                tracing::warn!(target: "quiver::web", "embedder cell already set");
             }
-            tracing::info!(target: "toolhub::web", "embedder ready");
+            tracing::info!(target: "quiver::web", "embedder ready");
         },
         Err(err) => {
-            tracing::error!(target: "toolhub::web", "embedder init failed: {err:#}");
+            tracing::error!(target: "quiver::web", "embedder init failed: {err:#}");
         },
     });
 }
 
 async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
-    tracing::info!(target: "toolhub::web", "shutdown signal received");
+    tracing::info!(target: "quiver::web", "shutdown signal received");
 }

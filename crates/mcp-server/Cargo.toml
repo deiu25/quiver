@@ -1,16 +1,16 @@
 [package]
-name = "toolhub-mcp-server"
+name = "quiver-mcp-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "rmcp stdio MCP server exposing toolhub tools to Claude Code"
+description = "rmcp stdio MCP server exposing quiver tools to Claude Code"
 
 [dependencies]
-toolhub-core = { path = "../core", version = "0.1.0" }
-toolhub-storage = { path = "../storage", version = "0.1.0" }
-toolhub-recommender = { path = "../recommender", version = "0.1.0" }
-toolhub-ingestion = { path = "../ingestion", version = "0.1.0" }
+quiver-core = { path = "../core", version = "0.1.0" }
+quiver-storage = { path = "../storage", version = "0.1.0" }
+quiver-recommender = { path = "../recommender", version = "0.1.0" }
+quiver-ingestion = { path = "../ingestion", version = "0.1.0" }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 rmcp = { workspace = true }

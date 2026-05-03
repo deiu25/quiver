@@ -1,14 +1,14 @@
 [package]
-name = "toolhub-recommender"
+name = "quiver-recommender"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Hybrid FTS + sqlite-vec cosine recommender with success-rate reranker for toolhub"
+description = "Hybrid FTS + sqlite-vec cosine recommender with success-rate reranker for quiver"
 
 [dependencies]
-toolhub-core    = { path = "../core", version = "0.1.0" }
-toolhub-storage = { path = "../storage", version = "0.1.0" }
+quiver-core    = { path = "../core", version = "0.1.0" }
+quiver-storage = { path = "../storage", version = "0.1.0" }
 anyhow          = { workspace = true }
 fastembed       = { workspace = true }
 rusqlite        = { workspace = true }

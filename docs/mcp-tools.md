@@ -1,6 +1,6 @@
-# ToolHub MCP Tools
+# Quiver MCP Tools
 
-ToolHub exposes its catalog over the Model Context Protocol so Claude Code (or any MCP client) can call it mid-session.
+Quiver exposes its catalog over the Model Context Protocol so Claude Code (or any MCP client) can call it mid-session.
 
 ## Wire-up
 
@@ -9,15 +9,15 @@ Append to `~/.claude/mcp_servers.json`:
 ```json
 {
   "mcpServers": {
-    "toolhub": {
-      "command": "toolhub",
+    "quiver": {
+      "command": "quiver",
       "args": ["mcp"]
     }
   }
 }
 ```
 
-Then restart Claude Code. `tools/list` will report 5 tools under the `toolhub` namespace.
+Then restart Claude Code. `tools/list` will report 5 tools under the `quiver` namespace.
 
 The server uses **stdio transport**: it speaks JSON-RPC on stdin/stdout. Logs go to stderr.
 
@@ -29,7 +29,7 @@ The server uses **stdio transport**: it speaks JSON-RPC on stdin/stdout. Logs go
 | `search` | Pure FTS5 keyword search. Faster than `recommend` for known terms. |
 | `info` | Full metadata for a single tool by id. |
 | `add_source` | Register a GitHub repo / URL as a tool source. **Phase 3 stub** — only records the row; fetch lands in Phase 5. |
-| `usage_stats` | Aggregated success rate / cost / duration per tool. Pass `tool_id` for the detail view (includes the 5 most-recent events). Run `toolhub score` first to populate. |
+| `usage_stats` | Aggregated success rate / cost / duration per tool. Pass `tool_id` for the detail view (includes the 5 most-recent events). Run `quiver score` first to populate. |
 
 ### `recommend`
 
@@ -123,7 +123,7 @@ Output (with `tool_id` set):
       "project": "quiver"
     }
   ],
-  "note": "Run `toolhub score` to populate from session JSONL."
+  "note": "Run `quiver score` to populate from session JSONL."
 }
 ```
 
@@ -136,24 +136,24 @@ before EOF), `unknown`. See PLAN.md §7 Phase 4.
 
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}' \
-  | toolhub mcp \
+  | quiver mcp \
   | head -1
 ```
 
 Expect a `result` object describing the server. Then:
 
 ```bash
-echo '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | toolhub mcp | head -1
+echo '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | quiver mcp | head -1
 ```
 
 Should list 5 tools.
 
 ## Storage location
 
-The server reads/writes the same SQLite DB as the CLI: `$XDG_DATA_HOME/toolhub/toolhub.sqlite`, falling back to `~/.local/share/toolhub/toolhub.sqlite`.
+The server reads/writes the same SQLite DB as the CLI: `$XDG_DATA_HOME/quiver/quiver.sqlite`, falling back to `~/.local/share/quiver/quiver.sqlite`.
 
-Run `toolhub sync` first (from the CLI) to populate the catalog before the MCP server is useful.
+Run `quiver sync` first (from the CLI) to populate the catalog before the MCP server is useful.
 
 ## First-call latency
 
-`recommend` lazy-loads the fastembed BAAI/bge-small-en-v1.5 model on its first invocation. Cold load is a few seconds (model already cached at `~/.cache/toolhub/models/` after the first `toolhub recommend`/`toolhub sync`). `search`, `info`, `add_source`, `usage_stats` never touch the embedder.
+`recommend` lazy-loads the fastembed BAAI/bge-small-en-v1.5 model on its first invocation. Cold load is a few seconds (model already cached at `~/.cache/quiver/models/` after the first `quiver recommend`/`quiver sync`). `search`, `info`, `add_source`, `usage_stats` never touch the embedder.

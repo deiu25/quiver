@@ -1,21 +1,21 @@
 //! Shared `top_k` recommendation pipeline.
 //!
 //! Same hybrid (sqlite-vec cosine + FTS5 BM25) → SuccessReranker pipeline
-//! the CLI `toolhub recommend` command uses (`crates/cli/src/commands/recommend.rs`).
+//! the CLI `quiver recommend` command uses (`crates/cli/src/commands/recommend.rs`).
 //! Lifted into the agent crate so both the CLI command and the long-running
 //! agent loop share one code path.
 
 use std::collections::HashMap;
 
 use anyhow::Result;
-use rusqlite::Connection;
-use toolhub_recommender::{
+use quiver_recommender::{
     embed::Embedder,
     params::{COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query},
     rerank::{Reranker, SuccessReranker},
     search,
 };
-use toolhub_storage::{embeddings, fts, tools};
+use quiver_storage::{embeddings, fts, tools};
+use rusqlite::Connection;
 
 #[derive(Debug, Clone)]
 pub struct RecHit {
@@ -27,7 +27,7 @@ pub struct RecHit {
 
 /// Run the full hybrid + rerank pipeline for `task` and return the top `k`
 /// hits with each hit's description + invocation joined in. Returns an empty
-/// vec when the vector index is empty (caller's signal to advise `toolhub sync`).
+/// vec when the vector index is empty (caller's signal to advise `quiver sync`).
 pub fn top_k(conn: &Connection, embedder: &Embedder, task: &str, k: usize) -> Result<Vec<RecHit>> {
     let q_emb = embedder.embed_one(task)?;
 
@@ -81,8 +81,8 @@ pub fn top_k(conn: &Connection, embedder: &Embedder, task: &str, k: usize) -> Re
 mod tests {
     use super::*;
     use chrono::Utc;
-    use toolhub_core::tool::{ToolMeta, ToolType};
-    use toolhub_storage::open;
+    use quiver_core::tool::{ToolMeta, ToolType};
+    use quiver_storage::open;
 
     fn seed_tool_with_emb(conn: &Connection, id: &str, desc: &str, emb: &[f32]) {
         let now = Utc::now();

@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
 use chrono::{DateTime, Utc};
+use quiver_core::tool::{ToolMeta, ToolType};
 use rusqlite::{Connection, params};
-use toolhub_core::tool::{ToolMeta, ToolType};
 
 fn type_to_str(t: ToolType) -> &'static str {
     match t {

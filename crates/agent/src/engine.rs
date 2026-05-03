@@ -12,10 +12,10 @@ use std::time::{Duration as StdDuration, Instant};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use quiver_core::usage::{Outcome, UsageEvent};
+use quiver_recommender::embed::Embedder;
+use quiver_storage::{open, suggestions, tools as tools_store, usage};
 use rusqlite::Connection;
-use toolhub_core::usage::{Outcome, UsageEvent};
-use toolhub_recommender::embed::Embedder;
-use toolhub_storage::{open, suggestions, tools as tools_store, usage};
 
 use crate::AgentConfig;
 use crate::hint;

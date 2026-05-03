@@ -1,14 +1,14 @@
-//! `toolhub sync` — re-scan filesystem and refresh DB.
+//! `quiver sync` — re-scan filesystem and refresh DB.
 //!
-//! Thin CLI wrapper over [`toolhub_ingestion::sync::run_sync`]. The CLI's job
+//! Thin CLI wrapper over [`quiver_ingestion::sync::run_sync`]. The CLI's job
 //! is just `default_db_path` + open + print; the discover/embed/persist
-//! pipeline lives in `toolhub_ingestion::sync` so the web layer can reuse it.
+//! pipeline lives in `quiver_ingestion::sync` so the web layer can reuse it.
 
 use std::path::PathBuf;
 
-use toolhub_ingestion::sync::{DiscoverReport, SyncReport, discover_all};
-use toolhub_recommender::embed::Embedder;
-use toolhub_storage::open;
+use quiver_ingestion::sync::{DiscoverReport, SyncReport, discover_all};
+use quiver_recommender::embed::Embedder;
+use quiver_storage::open;
 
 use crate::db_path::default_db_path;
 
@@ -48,7 +48,7 @@ pub async fn run() -> anyhow::Result<()> {
     let report = SyncReport {
         unique,
         skipped: skipped.len(),
-        catalog_total: toolhub_ingestion::persist::persist_tools(&conn, &embedder, &metas)?,
+        catalog_total: quiver_ingestion::persist::persist_tools(&conn, &embedder, &metas)?,
         skipped_paths: skipped,
     };
     println!("embedded {} tool(s)", report.catalog_total);

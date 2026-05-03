@@ -22,13 +22,13 @@ pub fn render(
     hits: &[RecHit],
 ) -> String {
     let mut out = String::new();
-    out.push_str(&format!("# ToolHub hint — {session_id}\n\n"));
+    out.push_str(&format!("# Quiver hint — {session_id}\n\n"));
     out.push_str(&format!("_generated {}_\n\n", ts.to_rfc3339()));
     if let Some(t) = task_text {
         out.push_str(&format!("**Task:** {t}\n\n"));
     }
     if hits.is_empty() {
-        out.push_str("_No recommendations — run `toolhub sync` to populate the index._\n");
+        out.push_str("_No recommendations — run `quiver sync` to populate the index._\n");
         return out;
     }
     out.push_str("## Top recommendations\n\n");
@@ -139,7 +139,7 @@ mod tests {
     fn render_includes_session_task_and_top_hits() {
         let ts = Utc.with_ymd_and_hms(2026, 5, 3, 12, 0, 0).unwrap();
         let body = render("smoke-1", Some("extract tokens"), ts, &hits_fixture());
-        assert!(body.contains("# ToolHub hint — smoke-1"));
+        assert!(body.contains("# Quiver hint — smoke-1"));
         assert!(body.contains("**Task:** extract tokens"));
         assert!(body.contains("1. **skill:designlang**"));
         assert!(body.contains("score 0.872"));

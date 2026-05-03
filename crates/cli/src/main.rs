@@ -24,7 +24,7 @@ mod tui;
 
 #[derive(Parser)]
 #[command(
-    name = "toolhub",
+    name = "quiver",
     version,
     about = "Claude Code tool registry & recommender"
 )]
@@ -51,7 +51,7 @@ enum Cmd {
     },
     /// Browse catalogued tools in an interactive TUI
     Tui,
-    /// Run the stdio MCP server (so Claude Code can call ToolHub mid-session)
+    /// Run the stdio MCP server (so Claude Code can call Quiver mid-session)
     Mcp,
     /// Replay Claude Code session JSONL into usage_events + rebuild tool_scores
     Score {

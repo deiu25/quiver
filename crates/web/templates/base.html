@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{% block title %}ToolHub{% endblock %}</title>
+    <title>{% block title %}Quiver{% endblock %}</title>
     <link rel="stylesheet" href="/static/app.css" />
     <script src="/static/htmx.min.js" defer></script>
     <script src="/static/htmx-sse.js" defer></script>
   </head>
   <body>
     <header class="nav">
-      <span class="brand">ToolHub</span>
+      <span class="brand">Quiver</span>
       <nav>
         <a href="/catalog" class="{% if active == "catalog" %}active{% endif %}">Catalog</a>
         <a href="/recommend" class="{% if active == "recommend" %}active{% endif %}">Recommend</a>

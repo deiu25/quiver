@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Sources · ToolHub{% endblock %}
+{% block title %}Sources · Quiver{% endblock %}
 {% block content %}
 <h1>Sources</h1>
 <p class="muted">
-  Sources are GitHub repos onboarded via <code>toolhub add &lt;url&gt;</code>.
+  Sources are GitHub repos onboarded via <code>quiver add &lt;url&gt;</code>.
   Sync rescans the local filesystem (skills, plugins, MCP servers); it does
-  not re-pull GitHub sources — use <code>toolhub update</code> for that.
+  not re-pull GitHub sources — use <code>quiver update</code> for that.
 </p>
 
 <form
@@ -19,7 +19,7 @@
 </form>
 
 {% if sources.is_empty() %}
-  <p class="muted">No GitHub sources registered yet. Run <code>toolhub add &lt;url&gt;</code>.</p>
+  <p class="muted">No GitHub sources registered yet. Run <code>quiver add &lt;url&gt;</code>.</p>
 {% else %}
 <table>
   <thead>

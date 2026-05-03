@@ -7,13 +7,13 @@
 //!   plugins / MCP servers, returns a [`DiscoverReport`] without touching the
 //!   DB or the embedder. Cheap to call from any context.
 //! * [`run_sync`] composes `discover_all` + [`persist_tools`] for the common
-//!   case (CLI `toolhub sync`, web `POST /api/sources/sync`).
+//!   case (CLI `quiver sync`, web `POST /api/sources/sync`).
 
 use std::path::{Path, PathBuf};
 
+use quiver_core::tool::ToolMeta;
+use quiver_recommender::embed::Embedder;
 use rusqlite::Connection;
-use toolhub_core::tool::ToolMeta;
-use toolhub_recommender::embed::Embedder;
 
 use crate::persist::persist_tools;
 use crate::{mcp_json, plugin_json, skill_md, walker};

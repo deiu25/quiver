@@ -1,7 +1,7 @@
-//! `toolhub dead-weight [--days 30]` — list catalogued tools with no usage
+//! `quiver dead-weight [--days 30]` — list catalogued tools with no usage
 //! recorded in the last N days.
 
-use toolhub_storage::{open, usage};
+use quiver_storage::{open, usage};
 
 use crate::db_path::default_db_path;
 

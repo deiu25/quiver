@@ -7,7 +7,7 @@ use axum::Router;
 use axum::extract::State;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
-use toolhub_storage::sources::{self, SourceRow};
+use quiver_storage::sources::{self, SourceRow};
 
 use crate::error::{WebError, WebResult};
 use crate::state::AppState;
@@ -84,10 +84,10 @@ async fn sync_sources(State(state): State<AppState>) -> WebResult<Response> {
     let pool = state.pool.clone();
 
     let result = tokio::task::spawn_blocking(
-        move || -> anyhow::Result<toolhub_ingestion::sync::SyncReport> {
+        move || -> anyhow::Result<quiver_ingestion::sync::SyncReport> {
             let conn = pool.get()?;
             let home = PathBuf::from(std::env::var("HOME").unwrap_or_default());
-            toolhub_ingestion::sync::run_sync(&conn, &embedder, &home)
+            quiver_ingestion::sync::run_sync(&conn, &embedder, &home)
         },
     )
     .await?;

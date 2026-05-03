@@ -3,8 +3,8 @@ use std::path::Path;
 
 use anyhow::{Context, anyhow};
 use chrono::Utc;
+use quiver_core::tool::{ToolMeta, ToolType};
 use serde::Deserialize;
-use toolhub_core::tool::{ToolMeta, ToolType};
 
 #[derive(Debug, Deserialize)]
 struct Frontmatter {

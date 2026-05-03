@@ -1,6 +1,6 @@
 -- Phase 4: dedupe key for replayed tool_use events.
 -- `uuid` mirrors the `id` field on the assistant `tool_use` content block in
--- Claude Code session JSONL, letting `toolhub score` re-run idempotently.
+-- Claude Code session JSONL, letting `quiver score` re-run idempotently.
 
 ALTER TABLE usage_events ADD COLUMN uuid TEXT;
 

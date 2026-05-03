@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, anyhow};
 use chrono::Utc;
-use toolhub_core::tool::{ToolMeta, ToolType};
+use quiver_core::tool::{ToolMeta, ToolType};
 
 use crate::{git_clone, plugin_json, skill_md, walker};
 

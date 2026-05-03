@@ -5,7 +5,7 @@ use axum::Router;
 use axum::extract::State;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
-use toolhub_storage::suggestions;
+use quiver_storage::suggestions;
 
 use crate::error::{WebError, WebResult};
 use crate::sse::{SuggestionRowView, suggestions_stream};

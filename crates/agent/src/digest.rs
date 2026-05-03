@@ -11,8 +11,8 @@ use std::path::Path;
 
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
+use quiver_storage::{open, scores, suggestions, tools, usage};
 use rusqlite::Connection;
-use toolhub_storage::{open, scores, suggestions, tools, usage};
 
 /// Generate a digest for the last `days` of activity. Writes the markdown to
 /// `out_path` if `Some`, else returns it as a `String` for the caller to
@@ -39,7 +39,7 @@ fn render(
     days: u32,
 ) -> Result<String> {
     let mut out = String::new();
-    out.push_str(&format!("# ToolHub digest — last {days} day(s)\n\n"));
+    out.push_str(&format!("# Quiver digest — last {days} day(s)\n\n"));
     out.push_str(&format!("_generated {}_\n\n", now.to_rfc3339()));
 
     out.push_str("## Top tools\n\n");
@@ -161,8 +161,8 @@ fn top_tools(conn: &Connection, cutoff: &DateTime<Utc>) -> Result<Vec<TopRow>> {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+    use quiver_core::usage::{Outcome, UsageEvent};
     use rusqlite::params;
-    use toolhub_core::usage::{Outcome, UsageEvent};
 
     fn seed_tool(conn: &Connection, id: &str, added: DateTime<Utc>) {
         conn.execute(

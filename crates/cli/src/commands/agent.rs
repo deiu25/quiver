@@ -1,12 +1,12 @@
-//! `toolhub agent` — foreground daily-task agent.
+//! `quiver agent` — foreground daily-task agent.
 //!
 //! Resolves default sessions/hints paths, builds an `AgentConfig`, then hands
-//! off to `toolhub_agent::run`. Blocks until Ctrl-C / SIGTERM.
+//! off to `quiver_agent::run`. Blocks until Ctrl-C / SIGTERM.
 
 use std::path::PathBuf;
 
 use anyhow::anyhow;
-use toolhub_agent::{AgentConfig, run};
+use quiver_agent::{AgentConfig, run};
 
 use crate::db_path::default_db_path;
 

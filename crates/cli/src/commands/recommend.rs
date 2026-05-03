@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use toolhub_recommender::params::{
+use quiver_recommender::params::{
     COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
 };
-use toolhub_recommender::rerank::{Reranker, SuccessReranker};
-use toolhub_recommender::{embed::Embedder, search};
-use toolhub_storage::{embeddings, fts, open, tools};
+use quiver_recommender::rerank::{Reranker, SuccessReranker};
+use quiver_recommender::{embed::Embedder, search};
+use quiver_storage::{embeddings, fts, open, tools};
 
 use crate::db_path::default_db_path;
 
@@ -22,7 +22,7 @@ pub async fn run(task: String) -> anyhow::Result<()> {
         .collect();
 
     if vec_sims.is_empty() {
-        println!("(empty index — run `toolhub sync` first)");
+        println!("(empty index — run `quiver sync` first)");
         return Ok(());
     }
 

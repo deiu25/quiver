@@ -18,7 +18,7 @@ Thumbs.db
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
-toolhub.db
+quiver.db
 
 # Embedding model cache
 .fastembed_cache/

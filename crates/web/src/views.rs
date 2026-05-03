@@ -4,8 +4,8 @@
 //! no DB.
 
 use chrono::{DateTime, Utc};
-use toolhub_core::tool::{ToolMeta, ToolType};
-use toolhub_storage::scores::ScoreRow;
+use quiver_core::tool::{ToolMeta, ToolType};
+use quiver_storage::scores::ScoreRow;
 
 pub struct ToolView {
     pub id: String,

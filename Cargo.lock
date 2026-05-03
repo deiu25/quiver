@@ -2675,6 +2675,162 @@ dependencies = [
 ]
 
 [[package]]
+name = "quiver"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "crossterm",
+ "quiver-agent",
+ "quiver-core",
+ "quiver-ingestion",
+ "quiver-mcp-server",
+ "quiver-recommender",
+ "quiver-storage",
+ "quiver-web",
+ "ratatui",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "walkdir",
+]
+
+[[package]]
+name = "quiver-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "notify",
+ "quiver-core",
+ "quiver-ingestion",
+ "quiver-recommender",
+ "quiver-storage",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "walkdir",
+]
+
+[[package]]
+name = "quiver-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "quiver-ingestion"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "quiver-core",
+ "quiver-recommender",
+ "quiver-storage",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "walkdir",
+]
+
+[[package]]
+name = "quiver-mcp-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "quiver-core",
+ "quiver-ingestion",
+ "quiver-recommender",
+ "quiver-storage",
+ "rmcp",
+ "rusqlite",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "quiver-recommender"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fastembed",
+ "quiver-core",
+ "quiver-storage",
+ "rusqlite",
+]
+
+[[package]]
+name = "quiver-storage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "quiver-core",
+ "r2d2",
+ "r2d2_sqlite",
+ "refinery",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sqlite-vec",
+ "tempfile",
+]
+
+[[package]]
+name = "quiver-web"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "askama",
+ "async-stream",
+ "axum",
+ "chrono",
+ "futures-util",
+ "mime_guess",
+ "quiver-agent",
+ "quiver-core",
+ "quiver-ingestion",
+ "quiver-recommender",
+ "quiver-storage",
+ "r2d2",
+ "r2d2_sqlite",
+ "reqwest",
+ "rusqlite",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tower",
+ "tower-http",
+ "tracing",
+ "webbrowser",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3952,162 +4108,6 @@ name = "toml_write"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
-
-[[package]]
-name = "toolhub"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "crossterm",
- "ratatui",
- "rusqlite",
- "serde",
- "serde_json",
- "tokio",
- "toolhub-agent",
- "toolhub-core",
- "toolhub-ingestion",
- "toolhub-mcp-server",
- "toolhub-recommender",
- "toolhub-storage",
- "toolhub-web",
- "tracing",
- "tracing-subscriber",
- "walkdir",
-]
-
-[[package]]
-name = "toolhub-agent"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "notify",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "toolhub-core",
- "toolhub-ingestion",
- "toolhub-recommender",
- "toolhub-storage",
- "tracing",
- "walkdir",
-]
-
-[[package]]
-name = "toolhub-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "toolhub-ingestion"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "rusqlite",
- "serde",
- "serde_json",
- "serde_yaml",
- "tempfile",
- "tokio",
- "toolhub-core",
- "toolhub-recommender",
- "toolhub-storage",
- "tracing",
- "walkdir",
-]
-
-[[package]]
-name = "toolhub-mcp-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "rmcp",
- "rusqlite",
- "schemars",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "toolhub-core",
- "toolhub-ingestion",
- "toolhub-recommender",
- "toolhub-storage",
- "tracing",
-]
-
-[[package]]
-name = "toolhub-recommender"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fastembed",
- "rusqlite",
- "toolhub-core",
- "toolhub-storage",
-]
-
-[[package]]
-name = "toolhub-storage"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "r2d2",
- "r2d2_sqlite",
- "refinery",
- "rusqlite",
- "serde",
- "serde_json",
- "sqlite-vec",
- "tempfile",
- "toolhub-core",
-]
-
-[[package]]
-name = "toolhub-web"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "askama",
- "async-stream",
- "axum",
- "chrono",
- "futures-util",
- "mime_guess",
- "r2d2",
- "r2d2_sqlite",
- "reqwest",
- "rusqlite",
- "rust-embed",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tokio-stream",
- "toolhub-agent",
- "toolhub-core",
- "toolhub-ingestion",
- "toolhub-recommender",
- "toolhub-storage",
- "tower",
- "tower-http",
- "tracing",
- "webbrowser",
-]
 
 [[package]]
 name = "tower"

@@ -1,4 +1,4 @@
-use toolhub_core::tool::{ToolMeta, ToolType};
+use quiver_core::tool::{ToolMeta, ToolType};
 
 /// Linear in-memory filter over the catalogued tools. Returns indices into
 /// the input slice in stable order so the caller can render without cloning.

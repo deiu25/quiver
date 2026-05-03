@@ -10,10 +10,10 @@
 //! Caller owns the `Connection` and `Embedder`. Pass `Embedder::new()` lazily
 //! — building it loads the fastembed model (~30 MB).
 
+use quiver_core::tool::ToolMeta;
+use quiver_recommender::embed::Embedder;
+use quiver_storage::{embeddings, fts, tools};
 use rusqlite::Connection;
-use toolhub_core::tool::ToolMeta;
-use toolhub_recommender::embed::Embedder;
-use toolhub_storage::{embeddings, fts, tools};
 
 /// Upsert `metas`, rebuild FTS, then re-embed the entire catalog. Returns the
 /// number of rows present in `tools` after upsert (i.e. the catalog size).

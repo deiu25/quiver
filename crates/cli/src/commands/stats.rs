@@ -1,11 +1,11 @@
-//! `toolhub stats` — aggregate view over `tool_scores` + `tools`.
+//! `quiver stats` — aggregate view over `tool_scores` + `tools`.
 //!
 //! - `--top N` (default 20): list top tools by `success_rate * ln(sample+1)`.
 //! - `--tool <id>`: detail view of one tool, including last 5 events.
 //! - `--json`: machine output.
 
+use quiver_storage::{open, scores, tools, usage};
 use serde::Serialize;
-use toolhub_storage::{open, scores, tools, usage};
 
 use crate::db_path::default_db_path;
 
@@ -124,7 +124,7 @@ fn build_row(conn: &rusqlite::Connection, id: &str) -> anyhow::Result<StatsRow> 
 
 fn print_table(rows: &[StatsRow]) {
     if rows.is_empty() {
-        println!("no tool_scores rows — run `toolhub score` first");
+        println!("no tool_scores rows — run `quiver score` first");
         return;
     }
     let header_id = "TOOL_ID";

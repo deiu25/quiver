@@ -3571,12 +3571,15 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "rusqlite",
  "serde",
  "serde_json",
  "serde_yaml",
  "tempfile",
  "tokio",
  "toolhub-core",
+ "toolhub-recommender",
+ "toolhub-storage",
  "tracing",
  "walkdir",
 ]

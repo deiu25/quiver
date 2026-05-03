@@ -7,10 +7,10 @@
 use chrono::Utc;
 
 use toolhub_ingestion::github_repo;
+use toolhub_ingestion::persist::persist_tools;
 use toolhub_recommender::embed::Embedder;
 use toolhub_storage::{open, sources};
 
-use crate::commands::persist::persist_tools;
 use crate::db_path::default_db_path;
 
 pub async fn run(url: String) -> anyhow::Result<()> {

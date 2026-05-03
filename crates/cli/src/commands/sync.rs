@@ -1,12 +1,15 @@
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+//! `toolhub sync` — re-scan filesystem and refresh DB.
+//!
+//! Thin CLI wrapper over [`toolhub_ingestion::sync::run_sync`]. The CLI's job
+//! is just `default_db_path` + open + print; the discover/embed/persist
+//! pipeline lives in `toolhub_ingestion::sync` so the web layer can reuse it.
 
-use toolhub_core::tool::ToolMeta;
-use toolhub_ingestion::{mcp_json, plugin_json, skill_md, walker};
+use std::path::PathBuf;
+
+use toolhub_ingestion::sync::{DiscoverReport, SyncReport, discover_all};
 use toolhub_recommender::embed::Embedder;
 use toolhub_storage::open;
 
-use crate::commands::persist::persist_tools;
 use crate::db_path::default_db_path;
 
 pub async fn run() -> anyhow::Result<()> {
@@ -16,65 +19,21 @@ pub async fn run() -> anyhow::Result<()> {
     }
     let conn = open(&db_path)?;
 
-    let home = std::env::var("HOME").unwrap_or_default();
-    let home_path = PathBuf::from(&home);
+    let home = PathBuf::from(std::env::var("HOME").unwrap_or_default());
 
-    let mut metas: Vec<ToolMeta> = Vec::new();
-    let mut seen_ids: HashSet<String> = HashSet::new();
-    let mut skipped = 0usize;
-
-    // 1) SKILL.md walker
-    for root in skill_roots(&home_path) {
-        for dir in walker::discover_skill_dirs(&root) {
-            match skill_md::parse_skill_dir(&dir) {
-                Ok(meta) => {
-                    if seen_ids.insert(meta.id.clone()) {
-                        metas.push(meta);
-                    }
-                },
-                Err(err) => {
-                    eprintln!("skip {}: {err:#}", dir.display());
-                    skipped += 1;
-                },
-            }
-        }
-    }
-
-    // 2) Plugins
-    let plugin_path = home_path.join(".claude/plugins/installed_plugins.json");
-    if plugin_path.exists() {
-        match plugin_json::parse_installed_plugins(&plugin_path) {
-            Ok(parsed) => {
-                for meta in parsed {
-                    if seen_ids.insert(meta.id.clone()) {
-                        metas.push(meta);
-                    }
-                }
-            },
-            Err(err) => eprintln!("skip {}: {err:#}", plugin_path.display()),
-        }
-    }
-
-    // 3) MCP servers
-    let mcp_path = home_path.join(".claude/mcp_servers.json");
-    if mcp_path.exists() {
-        match mcp_json::parse_mcp_servers(&mcp_path) {
-            Ok(parsed) => {
-                for meta in parsed {
-                    if seen_ids.insert(meta.id.clone()) {
-                        metas.push(meta);
-                    }
-                }
-            },
-            Err(err) => eprintln!("skip {}: {err:#}", mcp_path.display()),
-        }
+    // Discover first so we can print per-skip diagnostics on stderr in the
+    // CLI's idiomatic style. The web layer skips the prints and reads the
+    // returned vec instead.
+    let DiscoverReport { metas, skipped } = discover_all(&home);
+    for skip in &skipped {
+        eprintln!("skip {}: {}", skip.path.display(), skip.error);
     }
 
     let unique = metas.len();
     println!(
         "synced {unique} tool(s){} → {}",
-        if skipped > 0 {
-            format!(" ({skipped} skipped)")
+        if !skipped.is_empty() {
+            format!(" ({} skipped)", skipped.len())
         } else {
             String::new()
         },
@@ -86,19 +45,13 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     let embedder = Embedder::new()?;
-    let total = persist_tools(&conn, &embedder, &metas)?;
-    println!("embedded {total} tool(s)");
+    let report = SyncReport {
+        unique,
+        skipped: skipped.len(),
+        catalog_total: toolhub_ingestion::persist::persist_tools(&conn, &embedder, &metas)?,
+        skipped_paths: skipped,
+    };
+    println!("embedded {} tool(s)", report.catalog_total);
 
     Ok(())
-}
-
-fn skill_roots(home: &Path) -> Vec<PathBuf> {
-    if home.as_os_str().is_empty() {
-        return Vec::new();
-    }
-    vec![
-        home.join(".claude/skills"),
-        home.join(".agents/skills"),
-        home.join(".claude/plugins/cache"),
-    ]
 }

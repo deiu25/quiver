@@ -9,7 +9,6 @@ mod commands {
     pub mod digest;
     pub mod list;
     pub mod mcp;
-    pub mod persist;
     pub mod recommend;
     pub mod remove;
     pub mod score;

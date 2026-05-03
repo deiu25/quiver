@@ -4,6 +4,7 @@
 
 **Local tool registry, recommender, and background agent for Claude Code.**
 
+[![CI](https://github.com/deiu25/quiver/actions/workflows/ci.yml/badge.svg)](https://github.com/deiu25/quiver/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![Rust 2024](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org)
 [![Status](https://img.shields.io/badge/status-active-brightgreen.svg)](#roadmap)
@@ -212,9 +213,23 @@ crates/
 
 Phase 7 (local web UI on `toolhub serve`) shipped — see the **Local web UI** command above. Originally scoped as a Tauri 2 desktop app; pivoted to an axum + htmx loopback dashboard to keep the single-binary story.
 
+The v0.1 hardening pass landed CI (fmt + clippy + workspace tests on every push), a 50-task recommender relevance benchmark with a ≥80% top-3 acceptance gate (see [Benchmark](#benchmark)), and crates.io-ready packaging metadata on `toolhub-cli`.
+
 Three deferred polish items (orthogonal, will land any time): cost extraction from JSONL `usage` field, optional Anthropic-SDK README distillation in `add`, and a Haiku 4.5 task classifier in front of the embedder.
 
 Optional future work: a thin browser extension that talks to the same `/api/*` routes from claude.ai, and per-source CRUD (add/update/remove) exposed in the web UI alongside the existing CLI commands.
+
+---
+
+## Benchmark
+
+Recommender relevance is gated by a synthetic 50-task / 50-tool benchmark (`benches/tasks.json`) that ingests through the same `persist_tools` pipeline `toolhub sync` uses, runs the shared `top_k` recommender, and asserts a ≥80% top-3 hit rate. Each task is paraphrased away from the corresponding tool's description so the gate exercises FTS5 BM25 + sqlite-vec cosine, not exact-match.
+
+```bash
+cargo test -p toolhub-agent --test relevance --release -- --nocapture
+```
+
+First run downloads BAAI/bge-small-en-v1.5 (~30 MB) into `$XDG_CACHE_HOME/fastembed/`. Subsequent runs reuse the cache. CI caches that path under the key `fastembed-bge-small-en-v1.5`. Latency budget (<50 ms per `recommend` over 60 tools) is verified manually for now; criterion benches will land alongside the next perf pass.
 
 ---
 
@@ -239,6 +254,7 @@ cargo fmt --all -- --check
 - `toolhub info <id>` is currently a stub.
 - `toolhub agent` runs in the foreground — no daemon mode yet, wrap with `tmux` or `systemd`.
 - Linux + macOS only for now; Windows is untested (notify-rs supports it but no CI gate).
+- No prebuilt binaries yet — `cargo install --path crates/cli` from a clone is the supported install path until v0.1 lands on crates.io and GitHub Releases.
 
 ---
 

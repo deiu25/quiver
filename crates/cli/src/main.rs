@@ -4,7 +4,9 @@ use clap::{Parser, Subcommand};
 
 mod commands {
     pub mod add;
+    pub mod agent;
     pub mod dead_weight;
+    pub mod digest;
     pub mod list;
     pub mod mcp;
     pub mod persist;
@@ -88,6 +90,26 @@ enum Cmd {
         /// Source id, e.g. `gh:owner/repo`.
         source: String,
     },
+    /// Run the daily-task agent in foreground (Ctrl-C to stop).
+    /// Tails session JSONL files and writes hint markdown per session.
+    Agent {
+        /// Sessions root (default: $HOME/.claude/projects)
+        #[arg(long)]
+        sessions_dir: Option<PathBuf>,
+        /// Where to write `<session>.md` hints (default: $HOME/.claude/hints)
+        #[arg(long)]
+        hints_dir: Option<PathBuf>,
+    },
+    /// Generate a markdown digest of recent activity (top tools, dead weight,
+    /// suggestion acceptance, new arrivals).
+    Digest {
+        /// Window size in days
+        #[arg(long, default_value_t = 7)]
+        days: u32,
+        /// Write to this path instead of stdout
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
 }
 
 #[tokio::main]
@@ -116,5 +138,10 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Add { url } => commands::add::run(url).await,
         Cmd::Update { source } => commands::update::run(source).await,
         Cmd::Remove { source } => commands::remove::run(source).await,
+        Cmd::Agent {
+            sessions_dir,
+            hints_dir,
+        } => commands::agent::run_cmd(sessions_dir, hints_dir).await,
+        Cmd::Digest { days, out } => commands::digest::run_cmd(days, out).await,
     }
 }

@@ -8,6 +8,7 @@ use crate::state::AppState;
 
 pub mod catalog;
 pub mod recommend;
+pub mod sources;
 pub mod stats;
 
 pub fn router(state: AppState) -> Router {
@@ -18,6 +19,7 @@ pub fn router(state: AppState) -> Router {
         )
         .merge(catalog::routes())
         .merge(recommend::routes())
+        .merge(sources::routes())
         .merge(stats::routes())
         .route("/static/*path", get(serve_static))
         .with_state(state)

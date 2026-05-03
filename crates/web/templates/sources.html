@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Sources · ToolHub{% endblock %}
+{% block content %}
+<h1>Sources</h1>
+<p class="muted">
+  Sources are GitHub repos onboarded via <code>toolhub add &lt;url&gt;</code>.
+  Sync rescans the local filesystem (skills, plugins, MCP servers); it does
+  not re-pull GitHub sources — use <code>toolhub update</code> for that.
+</p>
+
+<form
+  hx-post="/api/sources/sync"
+  hx-target="#sync-result"
+  hx-swap="innerHTML"
+  hx-disabled-elt="this button"
+  style="margin-bottom:1rem">
+  <button type="submit">Sync now</button>
+  <span id="sync-result" class="muted" style="margin-left:0.75rem"></span>
+</form>
+
+{% if sources.is_empty() %}
+  <p class="muted">No GitHub sources registered yet. Run <code>toolhub add &lt;url&gt;</code>.</p>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Type</th>
+      <th>Location</th>
+      <th>Last pulled</th>
+      <th>Commit</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in sources %}
+    <tr>
+      <td><code>{{ s.id }}</code></td>
+      <td>{{ s.type_name }}</td>
+      <td><a href="{{ s.location }}">{{ s.location }}</a></td>
+      <td class="muted">{{ s.last_pulled_str }}</td>
+      <td class="muted"><code>{{ s.commit_short }}</code></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

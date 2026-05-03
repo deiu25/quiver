@@ -1,0 +1,7 @@
+{% if ok %}
+  <span class="dot ok"></span>
+  Synced {{ unique }} tool(s){% if skipped > 0 %} · {{ skipped }} skipped{% endif %} · catalog now {{ catalog_total }}.
+{% else %}
+  <span class="dot warn"></span>
+  Sync failed: {{ error }}
+{% endif %}

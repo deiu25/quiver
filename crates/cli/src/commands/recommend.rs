@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use toolhub_recommender::params::{
     COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
 };
+use toolhub_recommender::rerank::{Reranker, SuccessReranker};
 use toolhub_recommender::{embed::Embedder, search};
 use toolhub_storage::{embeddings, fts, open, tools};
 
@@ -38,7 +39,18 @@ pub async fn run(task: String) -> anyhow::Result<()> {
         }
     };
 
-    let hits = search::hybrid_from_score_maps(&vec_sims, &fts_hits, 3, COS_WEIGHT, FTS_WEIGHT);
+    // Pull a wider candidate set, then rerank by historical success_rate (PLAN
+    // §8.3). Reranker is a no-op when tool_scores is empty, so Phase 1–3
+    // behaviour is preserved.
+    let mut hits = search::hybrid_from_score_maps(
+        &vec_sims,
+        &fts_hits,
+        VEC_CANDIDATES.max(FTS_CANDIDATES),
+        COS_WEIGHT,
+        FTS_WEIGHT,
+    );
+    SuccessReranker::default().apply(&mut hits, &conn)?;
+    hits.truncate(3);
 
     let by_id: HashMap<String, _> = tools::list_all(&conn)?
         .into_iter()

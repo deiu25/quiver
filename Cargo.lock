@@ -3427,6 +3427,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "fastembed",
+ "rusqlite",
  "toolhub-core",
  "toolhub-storage",
 ]

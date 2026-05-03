@@ -7,4 +7,18 @@ repository.workspace = true
 
 [dependencies]
 toolhub-core = { path = "../core" }
+toolhub-storage = { path = "../storage" }
+toolhub-ingestion = { path = "../ingestion" }
+toolhub-recommender = { path = "../recommender" }
 anyhow = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+walkdir = { workspace = true }
+notify = { workspace = true }
+rusqlite = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

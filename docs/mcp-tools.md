@@ -29,7 +29,7 @@ The server uses **stdio transport**: it speaks JSON-RPC on stdin/stdout. Logs go
 | `search` | Pure FTS5 keyword search. Faster than `recommend` for known terms. |
 | `info` | Full metadata for a single tool by id. |
 | `add_source` | Register a GitHub repo / URL as a tool source. **Phase 3 stub** — only records the row; fetch lands in Phase 5. |
-| `usage_stats` | Aggregated success rate / cost / duration per tool. **Phase 3 stub** — returns `[]` until Phase 4 lands the heuristic scorer. |
+| `usage_stats` | Aggregated success rate / cost / duration per tool. Pass `tool_id` for the detail view (includes the 5 most-recent events). Run `toolhub score` first to populate. |
 
 ### `recommend`
 
@@ -102,13 +102,35 @@ Inputs:
 
 `tool_id` is optional; omit to list all rows.
 
-Output:
+Output (with `tool_id` set):
 ```json
 {
-  "rows": [],
-  "note": "Heuristic scoring lands in Phase 4; pre-Phase-4 calls return []."
+  "rows": [
+    {
+      "tool_id": "skill:caveman",
+      "success_rate": 0.85,
+      "sample_size": 42,
+      "avg_cost_usd": null,
+      "median_duration_ms": 240,
+      "score_updated_at": "2026-05-03T12:00:00+00:00"
+    }
+  ],
+  "recent_events": [
+    {
+      "occurred_at": "2026-05-03T12:00:00+00:00",
+      "outcome": "success",
+      "session_id": "sess-1",
+      "project": "quiver"
+    }
+  ],
+  "note": "Run `toolhub score` to populate from session JSONL."
 }
 ```
+
+`recent_events` is omitted from the response when `tool_id` is not set
+(or when no events match). Outcome heuristic: `success` (tool_result without
+`is_error`), `failure` (`is_error == true`), `abandoned` (no tool_result
+before EOF), `unknown`. See PLAN.md §7 Phase 4.
 
 ## Smoke test (no Claude Code restart needed)
 

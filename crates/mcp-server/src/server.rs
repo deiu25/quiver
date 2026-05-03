@@ -17,11 +17,11 @@ use toolhub_recommender::params::{
     COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
 };
 use toolhub_recommender::search;
-use toolhub_storage::{embeddings, fts, open, scores, sources, tools};
+use toolhub_storage::{embeddings, fts, open, scores, sources, tools, usage};
 
 use crate::schema::{
     AddSourceParams, AddSourceResult, InfoParams, RecommendHit, RecommendParams, SearchHit,
-    SearchParams, ToolInfo, UsageStatsParams, UsageStatsResult, UsageStatsRow,
+    SearchParams, ToolInfo, UsageEventBrief, UsageStatsParams, UsageStatsResult, UsageStatsRow,
 };
 
 /// 2 KB upper bound on free-text task input fed to the embedder.
@@ -230,8 +230,8 @@ impl ToolHubServer {
         serde_json::to_string(&result).map_err(|e| err(anyhow!(e)))
     }
 
-    #[tool(description = "Read aggregated success/cost/duration scores. \
-                       Phase 3 returns rows from `tool_scores`, which is empty until Phase 4.")]
+    #[tool(description = "Aggregated success/cost/duration scores per tool. \
+                       Pass `tool_id` for the detail view (includes the 5 most-recent events).")]
     fn usage_stats(
         &self,
         Parameters(p): Parameters<UsageStatsParams>,
@@ -249,9 +249,28 @@ impl ToolHubServer {
                 score_updated_at: r.score_updated_at,
             })
             .collect();
+
+        let recent_events = match &p.tool_id {
+            Some(id) => usage::list_events(&conn, Some(id), 5)
+                .map_err(err)?
+                .into_iter()
+                .map(|e| UsageEventBrief {
+                    occurred_at: e.occurred_at,
+                    outcome: e
+                        .outcome
+                        .map(|o| o.as_str().to_string())
+                        .unwrap_or_else(|| "unknown".into()),
+                    session_id: e.session_id,
+                    project: e.project,
+                })
+                .collect(),
+            None => Vec::new(),
+        };
+
         let result = UsageStatsResult {
             rows,
-            note: "Heuristic scoring lands in Phase 4; pre-Phase-4 calls return [].",
+            recent_events,
+            note: "Run `toolhub score` to populate from session JSONL.",
         };
         serde_json::to_string(&result).map_err(|e| err(anyhow!(e)))
     }
@@ -407,14 +426,54 @@ mod tests {
     }
 
     #[test]
-    fn usage_stats_returns_empty_phase3() {
+    fn usage_stats_returns_empty_when_no_data() {
         let (server, _dir) = make_server();
         let out = server
             .usage_stats(Parameters(UsageStatsParams { tool_id: None }))
             .unwrap();
         let v: serde_json::Value = serde_json::from_str(&out).unwrap();
         assert!(v["rows"].as_array().unwrap().is_empty());
-        assert!(v["note"].as_str().unwrap().contains("Phase 4"));
+        assert!(v["note"].as_str().unwrap().contains("toolhub score"));
+        // recent_events is skipped when empty.
+        assert!(v.get("recent_events").is_none() || v["recent_events"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn usage_stats_includes_recent_events_for_tool_filter() {
+        use chrono::{TimeZone, Utc};
+        use toolhub_core::usage::{Outcome, UsageEvent};
+
+        let (server, _dir) = make_server();
+        {
+            let conn = server.state.conn.lock().unwrap();
+            tools::upsert(&conn, &sample_meta("skill:caveman", "caveman")).unwrap();
+            usage::insert_event(
+                &conn,
+                &UsageEvent {
+                    uuid: Some("u1".into()),
+                    tool_id: "skill:caveman".into(),
+                    session_id: Some("sess-1".into()),
+                    project: Some("quiver".into()),
+                    task_text: Some("write something terse".into()),
+                    outcome: Outcome::Success,
+                    duration_ms: Some(120),
+                    cost_usd: None,
+                    occurred_at: Utc.with_ymd_and_hms(2026, 5, 3, 12, 0, 0).unwrap(),
+                },
+            )
+            .unwrap();
+        }
+        let out = server
+            .usage_stats(Parameters(UsageStatsParams {
+                tool_id: Some("skill:caveman".into()),
+            }))
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let events = v["recent_events"].as_array().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["outcome"], "success");
+        assert_eq!(events[0]["session_id"], "sess-1");
+        assert_eq!(events[0]["project"], "quiver");
     }
 
     #[test]

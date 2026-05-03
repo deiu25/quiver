@@ -138,7 +138,19 @@ pub struct UsageStatsRow {
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
+pub struct UsageEventBrief {
+    pub occurred_at: String,
+    pub outcome: String,
+    pub session_id: Option<String>,
+    pub project: Option<String>,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct UsageStatsResult {
     pub rows: Vec<UsageStatsRow>,
+    /// Most-recent events for the requested tool when `tool_id` is set; empty
+    /// otherwise.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recent_events: Vec<UsageEventBrief>,
     pub note: &'static str,
 }

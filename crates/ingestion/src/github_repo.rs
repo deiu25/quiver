@@ -159,14 +159,12 @@ fn is_cli(root: &Path) -> bool {
         }
     }
     let pkg = root.join("package.json");
-    if pkg.is_file() {
-        if let Ok(raw) = std::fs::read_to_string(&pkg) {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
-                if v.get("bin").is_some() {
-                    return true;
-                }
-            }
-        }
+    if pkg.is_file()
+        && let Ok(raw) = std::fs::read_to_string(&pkg)
+        && let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw)
+        && v.get("bin").is_some()
+    {
+        return true;
     }
     false
 }
@@ -218,18 +216,17 @@ fn ingest_plugin_marketplace(root: &Path, source_url: &str) -> anyhow::Result<Ve
     // marketplace.json files use a different schema, so fall back to a
     // single doc-style row in that case.
     let market = root.join("marketplace.json");
-    if market.is_file() {
-        if let Ok(metas) = plugin_json::parse_installed_plugins(&market) {
-            if !metas.is_empty() {
-                return Ok(metas
-                    .into_iter()
-                    .map(|mut m| {
-                        m.source_repo = Some(source_url.to_string());
-                        m
-                    })
-                    .collect());
-            }
-        }
+    if market.is_file()
+        && let Ok(metas) = plugin_json::parse_installed_plugins(&market)
+        && !metas.is_empty()
+    {
+        return Ok(metas
+            .into_iter()
+            .map(|mut m| {
+                m.source_repo = Some(source_url.to_string());
+                m
+            })
+            .collect());
     }
     // Walk plugins/<name>/plugin.json — minimal name-only ingest.
     let mut out = Vec::new();

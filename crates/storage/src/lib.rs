@@ -7,6 +7,7 @@ use rusqlite::Connection;
 
 pub mod embeddings;
 pub mod fts;
+pub mod pool;
 pub mod scores;
 pub mod sources;
 pub mod suggestions;
@@ -36,7 +37,7 @@ static VEC_INIT: Once = Once::new();
 
 /// Register the sqlite-vec extension as an auto-extension so every
 /// `Connection::open` after this point loads `vec0`. Idempotent.
-fn ensure_vec_extension() {
+pub fn ensure_vec_extension() {
     VEC_INIT.call_once(|| {
         // sqlite_vec::sqlite3_vec_init has the exact extension entry-point
         // signature `unsafe extern "C" fn(*mut sqlite3, *mut *mut c_char,

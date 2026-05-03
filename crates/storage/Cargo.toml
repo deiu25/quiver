@@ -10,6 +10,8 @@ toolhub-core = { path = "../core" }
 anyhow = { workspace = true }
 rusqlite = { workspace = true }
 refinery = { workspace = true }
+r2d2 = { workspace = true }
+r2d2_sqlite = { workspace = true }
 sqlite-vec = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }

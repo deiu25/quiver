@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use toolhub_core::tool::ToolMeta;
 use toolhub_ingestion::{mcp_json, plugin_json, skill_md, walker};
 use toolhub_recommender::embed::Embedder;
-use toolhub_storage::{embeddings, fts, open, tools};
+use toolhub_storage::open;
 
+use crate::commands::persist::persist_tools;
 use crate::db_path::default_db_path;
 
 pub async fn run() -> anyhow::Result<()> {
@@ -18,6 +19,7 @@ pub async fn run() -> anyhow::Result<()> {
     let home = std::env::var("HOME").unwrap_or_default();
     let home_path = PathBuf::from(&home);
 
+    let mut metas: Vec<ToolMeta> = Vec::new();
     let mut seen_ids: HashSet<String> = HashSet::new();
     let mut skipped = 0usize;
 
@@ -26,8 +28,9 @@ pub async fn run() -> anyhow::Result<()> {
         for dir in walker::discover_skill_dirs(&root) {
             match skill_md::parse_skill_dir(&dir) {
                 Ok(meta) => {
-                    tools::upsert(&conn, &meta)?;
-                    seen_ids.insert(meta.id);
+                    if seen_ids.insert(meta.id.clone()) {
+                        metas.push(meta);
+                    }
                 },
                 Err(err) => {
                     eprintln!("skip {}: {err:#}", dir.display());
@@ -41,10 +44,11 @@ pub async fn run() -> anyhow::Result<()> {
     let plugin_path = home_path.join(".claude/plugins/installed_plugins.json");
     if plugin_path.exists() {
         match plugin_json::parse_installed_plugins(&plugin_path) {
-            Ok(metas) => {
-                for meta in metas {
-                    tools::upsert(&conn, &meta)?;
-                    seen_ids.insert(meta.id);
+            Ok(parsed) => {
+                for meta in parsed {
+                    if seen_ids.insert(meta.id.clone()) {
+                        metas.push(meta);
+                    }
                 }
             },
             Err(err) => eprintln!("skip {}: {err:#}", plugin_path.display()),
@@ -55,17 +59,18 @@ pub async fn run() -> anyhow::Result<()> {
     let mcp_path = home_path.join(".claude/mcp_servers.json");
     if mcp_path.exists() {
         match mcp_json::parse_mcp_servers(&mcp_path) {
-            Ok(metas) => {
-                for meta in metas {
-                    tools::upsert(&conn, &meta)?;
-                    seen_ids.insert(meta.id);
+            Ok(parsed) => {
+                for meta in parsed {
+                    if seen_ids.insert(meta.id.clone()) {
+                        metas.push(meta);
+                    }
                 }
             },
             Err(err) => eprintln!("skip {}: {err:#}", mcp_path.display()),
         }
     }
 
-    let unique = seen_ids.len();
+    let unique = metas.len();
     println!(
         "synced {unique} tool(s){} → {}",
         if skipped > 0 {
@@ -80,24 +85,11 @@ pub async fn run() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    fts::rebuild(&conn)?;
-
-    let metas = tools::list_all(&conn)?;
-    let texts: Vec<String> = metas.iter().map(embed_text).collect();
     let embedder = Embedder::new()?;
-    let vectors = embedder.embed_batch(texts)?;
-    for (m, v) in metas.iter().zip(&vectors) {
-        embeddings::upsert(&conn, &m.id, v)?;
-    }
-    println!("embedded {} tool(s)", vectors.len());
+    let total = persist_tools(&conn, &embedder, &metas)?;
+    println!("embedded {total} tool(s)");
 
     Ok(())
-}
-
-fn embed_text(m: &ToolMeta) -> String {
-    let desc = m.description.as_deref().unwrap_or("");
-    let triggers = m.triggers.join(", ");
-    format!("{}\n{}\n{}", m.name, desc, triggers)
 }
 
 fn skill_roots(home: &Path) -> Vec<PathBuf> {

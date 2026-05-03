@@ -6,6 +6,7 @@ mod commands {
     pub mod dead_weight;
     pub mod list;
     pub mod mcp;
+    pub mod persist;
     pub mod recommend;
     pub mod score;
     pub mod stats;

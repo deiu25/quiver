@@ -1,9 +1,14 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 
 mod commands {
+    pub mod dead_weight;
     pub mod list;
     pub mod mcp;
     pub mod recommend;
+    pub mod score;
+    pub mod stats;
     pub mod sync;
     pub mod tui;
 }
@@ -41,6 +46,29 @@ enum Cmd {
     Tui,
     /// Run the stdio MCP server (so Claude Code can call ToolHub mid-session)
     Mcp,
+    /// Replay Claude Code session JSONL into usage_events + rebuild tool_scores
+    Score {
+        /// Sessions root (default: $HOME/.claude/projects)
+        #[arg(long)]
+        sessions_dir: Option<PathBuf>,
+    },
+    /// Show usage stats from tool_scores
+    Stats {
+        /// Detail view for one tool id, e.g. `skill:caveman`
+        #[arg(long)]
+        tool: Option<String>,
+        /// How many rows to show in list mode
+        #[arg(long, default_value_t = 20)]
+        top: usize,
+        /// Emit JSON instead of a table
+        #[arg(long)]
+        json: bool,
+    },
+    /// List catalogued tools with no usage in the last N days
+    DeadWeight {
+        #[arg(long, default_value_t = 30)]
+        days: u32,
+    },
 }
 
 #[tokio::main]
@@ -63,5 +91,8 @@ async fn main() -> anyhow::Result<()> {
         }
         Cmd::Tui => commands::tui::run().await,
         Cmd::Mcp => commands::mcp::run().await,
+        Cmd::Score { sessions_dir } => commands::score::run(sessions_dir).await,
+        Cmd::Stats { tool, top, json } => commands::stats::run(tool, top, json).await,
+        Cmd::DeadWeight { days } => commands::dead_weight::run(days).await,
     }
 }

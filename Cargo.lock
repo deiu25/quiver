@@ -3363,6 +3363,8 @@ dependencies = [
  "clap",
  "crossterm",
  "ratatui",
+ "rusqlite",
+ "serde",
  "serde_json",
  "tokio",
  "toolhub-core",
@@ -3372,6 +3374,7 @@ dependencies = [
  "toolhub-storage",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]

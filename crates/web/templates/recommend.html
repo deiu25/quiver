@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Recommend · ToolHub{% endblock %}
+{% block content %}
+<h1>Recommend</h1>
+<p class="muted">Type a task. Get the top-3 tools.</p>
+
+<form class="row"
+      hx-post="/api/recommend"
+      hx-trigger="keyup changed delay:300ms from:input, submit"
+      hx-target="#recs"
+      hx-include="this">
+  <input type="text" name="task" placeholder="e.g. extract design tokens from a marketing page"
+         autocomplete="off" autofocus style="flex:1" />
+</form>
+
+<div id="recs" style="margin-top:1rem"></div>
+{% endblock %}

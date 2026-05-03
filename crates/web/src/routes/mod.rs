@@ -7,6 +7,7 @@ use crate::assets::serve_static;
 use crate::state::AppState;
 
 pub mod catalog;
+pub mod recommend;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -15,6 +16,7 @@ pub fn router(state: AppState) -> Router {
             get(|| async { axum::response::Redirect::to("/catalog") }),
         )
         .merge(catalog::routes())
+        .merge(recommend::routes())
         .route("/static/*path", get(serve_static))
         .with_state(state)
 }

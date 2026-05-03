@@ -1,0 +1,13 @@
+<div class="card">
+  <div class="row">
+    <a href="/tool/{{ hit.tool_id }}"><strong>{{ hit.tool_id }}</strong></a>
+    <span class="spacer"></span>
+    <span class="score">score {{ hit.score_str }}</span>
+  </div>
+  {% if hit.description.is_some() %}
+    <p>{{ hit.description.as_ref().unwrap() }}</p>
+  {% endif %}
+  {% if hit.invocation.is_some() %}
+    <p class="muted">Run: <code>{{ hit.invocation.as_ref().unwrap() }}</code></p>
+  {% endif %}
+</div>

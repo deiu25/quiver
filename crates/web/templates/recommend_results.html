@@ -1,0 +1,7 @@
+{% if hits.is_empty() %}
+  <p class="muted">No matches yet — try a longer task description, or run <code>toolhub sync</code> if the catalog is empty.</p>
+{% else %}
+  {% for hit in hits %}
+    {% include "recommendation_card.html" %}
+  {% endfor %}
+{% endif %}

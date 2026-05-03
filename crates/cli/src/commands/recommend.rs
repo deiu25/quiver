@@ -35,7 +35,7 @@ pub async fn run(task: String) -> anyhow::Result<()> {
             Err(err) => {
                 eprintln!("fts search failed: {err:#} (falling back to vec-only)");
                 HashMap::new()
-            }
+            },
         }
     };
 

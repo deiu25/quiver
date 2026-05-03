@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Info { id } => {
             println!("info({id:?}): not yet implemented (Phase 1 follow-up)");
             Ok(())
-        }
+        },
         Cmd::Tui => commands::tui::run().await,
         Cmd::Mcp => commands::mcp::run().await,
         Cmd::Score { sessions_dir } => commands::score::run(sessions_dir).await,

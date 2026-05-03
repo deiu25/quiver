@@ -28,11 +28,11 @@ pub async fn run() -> anyhow::Result<()> {
                 Ok(meta) => {
                     tools::upsert(&conn, &meta)?;
                     seen_ids.insert(meta.id);
-                }
+                },
                 Err(err) => {
                     eprintln!("skip {}: {err:#}", dir.display());
                     skipped += 1;
-                }
+                },
             }
         }
     }
@@ -46,7 +46,7 @@ pub async fn run() -> anyhow::Result<()> {
                     tools::upsert(&conn, &meta)?;
                     seen_ids.insert(meta.id);
                 }
-            }
+            },
             Err(err) => eprintln!("skip {}: {err:#}", plugin_path.display()),
         }
     }
@@ -60,7 +60,7 @@ pub async fn run() -> anyhow::Result<()> {
                     tools::upsert(&conn, &meta)?;
                     seen_ids.insert(meta.id);
                 }
-            }
+            },
             Err(err) => eprintln!("skip {}: {err:#}", mcp_path.display()),
         }
     }

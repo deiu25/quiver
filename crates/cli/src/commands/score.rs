@@ -61,14 +61,14 @@ pub async fn run(sessions_dir: Option<PathBuf>) -> anyhow::Result<()> {
                         Ok(false) => deduped += 1,
                         Err(e) => {
                             eprintln!("insert {} failed: {e}", ev.tool_id);
-                        }
+                        },
                     }
                 }
-            }
+            },
             Err(e) => {
                 eprintln!("replay {} failed: {e:#}", path.display());
                 skipped_files += 1;
-            }
+            },
         }
     }
 

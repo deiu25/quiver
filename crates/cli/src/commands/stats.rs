@@ -82,10 +82,8 @@ pub async fn run(tool: Option<String>, top: usize, json: bool) -> anyhow::Result
         .collect();
 
     rows.sort_by(|a, b| {
-        let av = a.success_rate.unwrap_or(0.0)
-            * ((a.sample_size.unwrap_or(0) as f64) + 1.0).ln();
-        let bv = b.success_rate.unwrap_or(0.0)
-            * ((b.sample_size.unwrap_or(0) as f64) + 1.0).ln();
+        let av = a.success_rate.unwrap_or(0.0) * ((a.sample_size.unwrap_or(0) as f64) + 1.0).ln();
+        let bv = b.success_rate.unwrap_or(0.0) * ((b.sample_size.unwrap_or(0) as f64) + 1.0).ln();
         bv.partial_cmp(&av).unwrap_or(std::cmp::Ordering::Equal)
     });
     rows.truncate(top);
@@ -134,9 +132,7 @@ fn print_table(rows: &[StatsRow]) {
     let header_rate = "RATE";
     let header_n = "N";
     let header_med = "MED_MS";
-    println!(
-        "{header_id:<40} {header_name:<28} {header_rate:>6} {header_n:>8} {header_med:>10}"
-    );
+    println!("{header_id:<40} {header_name:<28} {header_rate:>6} {header_n:>8} {header_med:>10}");
     for r in rows {
         let rate = r
             .success_rate

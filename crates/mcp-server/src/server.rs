@@ -138,7 +138,7 @@ impl ToolHubServer {
                 Err(e) => {
                     tracing::warn!("fts search failed, vec-only: {e:#}");
                     HashMap::new()
-                }
+                },
             }
         };
 
@@ -209,7 +209,7 @@ impl ToolHubServer {
             Some(m) => {
                 let info: ToolInfo = m.into();
                 serde_json::to_string(&info).map_err(|e| err(anyhow!(e)))
-            }
+            },
         }
     }
 
@@ -435,7 +435,9 @@ mod tests {
         assert!(v["rows"].as_array().unwrap().is_empty());
         assert!(v["note"].as_str().unwrap().contains("toolhub score"));
         // recent_events is skipped when empty.
-        assert!(v.get("recent_events").is_none() || v["recent_events"].as_array().unwrap().is_empty());
+        assert!(
+            v.get("recent_events").is_none() || v["recent_events"].as_array().unwrap().is_empty()
+        );
     }
 
     #[test]

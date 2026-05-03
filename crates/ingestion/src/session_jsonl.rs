@@ -133,7 +133,7 @@ pub fn replay(path: &Path) -> anyhow::Result<Vec<UsageEvent>> {
                     line_idx + 1
                 );
                 continue;
-            }
+            },
         };
         if line.trim().is_empty() {
             continue;
@@ -147,7 +147,7 @@ pub fn replay(path: &Path) -> anyhow::Result<Vec<UsageEvent>> {
                     line_idx + 1
                 );
                 continue;
-            }
+            },
         };
 
         let kind = v.get("type").and_then(|s| s.as_str()).unwrap_or("");
@@ -170,17 +170,17 @@ pub fn replay(path: &Path) -> anyhow::Result<Vec<UsageEvent>> {
                             if let Some(t) = block.get("text").and_then(|s| s.as_str()) {
                                 last_user_text = Some(truncate(t, TASK_TEXT_MAX));
                             }
-                        }
+                        },
                         "tool_result" => {
                             if let Some(id) = block.get("tool_use_id").and_then(|s| s.as_str()) {
                                 let is_err = block.get("is_error").and_then(|b| b.as_bool());
                                 results.insert(id.to_string(), is_err);
                             }
-                        }
-                        _ => {}
+                        },
+                        _ => {},
                     }
                 }
-            }
+            },
             "assistant" => {
                 let ts = v
                     .get("timestamp")
@@ -217,8 +217,8 @@ pub fn replay(path: &Path) -> anyhow::Result<Vec<UsageEvent>> {
                     pending.insert(id.clone(), pu);
                     order.push(id);
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
@@ -295,9 +295,8 @@ mod tests {
 
     #[test]
     fn project_strips_dash_prefix_and_lowercases() {
-        let p = Path::new(
-            "/home/x/.claude/projects/-home-deiu-Documents-Programming-Quiver/abc.jsonl",
-        );
+        let p =
+            Path::new("/home/x/.claude/projects/-home-deiu-Documents-Programming-Quiver/abc.jsonl");
         assert_eq!(project_from_path(p).as_deref(), Some("quiver"));
     }
 
@@ -382,9 +381,9 @@ mod tests {
         let (_d, path) = write_fixture(&[
             json!({"type": "queue-operation", "operation": "enqueue"}),
             json!({"type": "assistant", "timestamp": "2026-05-03T12:00:00Z",
-                   "message": {"content": [
-                       {"type": "tool_use", "id": "x", "name": "Skill", "input": {"skill": "y"}}
-                   ]}}),
+            "message": {"content": [
+                {"type": "tool_use", "id": "x", "name": "Skill", "input": {"skill": "y"}}
+            ]}}),
         ]);
         std::fs::write(
             &path,

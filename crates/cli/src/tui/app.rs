@@ -100,15 +100,15 @@ impl App {
             (Mode::List, AppAction::Home) => self.selected = 0,
             (Mode::List, AppAction::End) => {
                 self.selected = self.filtered.len().saturating_sub(1);
-            }
+            },
             (Mode::List, AppAction::Enter) if self.selected_tool().is_some() => {
                 self.mode = Mode::Detail;
                 self.detail_scroll = 0;
-            }
+            },
             (Mode::List, AppAction::EnterSearch) => {
                 self.search_snapshot = Some(self.search_buf.clone());
                 self.mode = Mode::Search;
-            }
+            },
             (Mode::List, AppAction::CycleType) => {
                 let cur = TYPE_CYCLE
                     .iter()
@@ -117,55 +117,55 @@ impl App {
                 let next = (cur + 1) % TYPE_CYCLE.len();
                 self.type_filter = TYPE_CYCLE[next];
                 self.recompute_filtered();
-            }
+            },
             (Mode::List, AppAction::ClearFilter) => {
                 self.search_buf.clear();
                 self.type_filter = None;
                 self.recompute_filtered();
-            }
+            },
 
             // ---- detail
             (Mode::Detail, AppAction::Up) => {
                 self.detail_scroll = self.detail_scroll.saturating_sub(1);
-            }
+            },
             (Mode::Detail, AppAction::Down) => {
                 self.detail_scroll = self.detail_scroll.saturating_add(1);
-            }
+            },
             (Mode::Detail, AppAction::PageUp) => {
                 self.detail_scroll = self.detail_scroll.saturating_sub(PAGE_JUMP as u16);
-            }
+            },
             (Mode::Detail, AppAction::PageDown) => {
                 self.detail_scroll = self.detail_scroll.saturating_add(PAGE_JUMP as u16);
-            }
+            },
             (Mode::Detail, AppAction::Back) => {
                 self.mode = Mode::List;
-            }
+            },
             (Mode::Detail, AppAction::OpenEditor) => {
                 return self.open_editor_side_effect();
-            }
+            },
 
             // ---- search modal
             (Mode::Search, AppAction::SearchPush(c)) => {
                 self.search_buf.push(c);
                 self.recompute_filtered();
-            }
+            },
             (Mode::Search, AppAction::SearchPop) => {
                 self.search_buf.pop();
                 self.recompute_filtered();
-            }
+            },
             (Mode::Search, AppAction::SearchCommit) => {
                 self.search_snapshot = None;
                 self.mode = Mode::List;
-            }
+            },
             (Mode::Search, AppAction::SearchCancel) => {
                 if let Some(prev) = self.search_snapshot.take() {
                     self.search_buf = prev;
                     self.recompute_filtered();
                 }
                 self.mode = Mode::List;
-            }
+            },
 
-            _ => {}
+            _ => {},
         }
         None
     }

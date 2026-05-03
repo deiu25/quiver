@@ -62,10 +62,7 @@ impl Reranker for SuccessReranker {
     }
 }
 
-fn load_scores(
-    conn: &Connection,
-    hits: &[Hit],
-) -> anyhow::Result<HashMap<String, (f64, i64)>> {
+fn load_scores(conn: &Connection, hits: &[Hit]) -> anyhow::Result<HashMap<String, (f64, i64)>> {
     let ids: Vec<&str> = hits.iter().map(|h| h.tool_id.as_str()).collect();
     let placeholders = std::iter::repeat_n("?", ids.len())
         .collect::<Vec<_>>()
@@ -76,8 +73,7 @@ fn load_scores(
          WHERE tool_id IN ({placeholders})"
     );
     let mut stmt = conn.prepare(&sql)?;
-    let params: Vec<&dyn rusqlite::ToSql> =
-        ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+    let params: Vec<&dyn rusqlite::ToSql> = ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
     let rows = stmt
         .query_map(params.as_slice(), |row| {
             Ok((

@@ -10,6 +10,7 @@ pub mod catalog;
 pub mod recommend;
 pub mod sources;
 pub mod stats;
+pub mod suggestions;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -21,6 +22,7 @@ pub fn router(state: AppState) -> Router {
         .merge(recommend::routes())
         .merge(sources::routes())
         .merge(stats::routes())
+        .merge(suggestions::routes())
         .route("/static/*path", get(serve_static))
         .with_state(state)
 }

@@ -1,0 +1,15 @@
+<div id="suggestion-{{ row.id }}" class="card"{% if row.oob %} hx-swap-oob="outerHTML"{% endif %}>
+  <div class="row">
+    {% if row.accepted %}<span class="dot ok"></span>{% else %}<span class="dot"></span>{% endif %}
+    <a href="/tool/{{ row.tool_id }}"><strong>{{ row.tool_id }}</strong></a>
+    <span class="muted">· session <code>{{ row.session_id }}</code></span>
+    <span class="spacer"></span>
+    <span class="score">{{ row.suggested_str }} · score {{ row.score_str }}</span>
+  </div>
+  {% if !row.task_text.is_empty() %}
+    <p class="muted">{{ row.task_text }}</p>
+  {% endif %}
+  {% if row.accepted %}
+    <p class="muted"><span class="tag skill">accepted</span> at {{ row.accepted_str }}</p>
+  {% endif %}
+</div>

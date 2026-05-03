@@ -16,6 +16,7 @@ use tokio::sync::OnceCell;
 mod assets;
 pub mod error;
 pub mod routes;
+pub mod sse;
 mod state;
 mod views;
 

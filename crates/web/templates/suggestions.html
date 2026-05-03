@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Suggestions · ToolHub{% endblock %}
+{% block content %}
+<h1>Suggestions <span class="muted">live</span></h1>
+<p class="muted">
+  Each row is a top-1 recommendation the agent surfaced for a watched session.
+  Rows turn green and tagged <span class="tag skill">accepted</span> when you
+  invoke the tool within the acceptance window.
+</p>
+
+<div id="feed"
+     hx-ext="sse"
+     sse-connect="/api/suggestions/stream"
+     sse-swap="suggestion"
+     hx-swap="afterbegin">
+  {% if rows.is_empty() %}
+    <p class="muted" id="empty-feed">
+      No suggestions yet. Run <code>toolhub agent</code> in another pane —
+      new rows will stream in here.
+    </p>
+  {% else %}
+    {% for row in rows %}
+      {% include "suggestion_row.html" %}
+    {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

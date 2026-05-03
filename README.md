@@ -31,6 +31,7 @@ No telemetry. No cloud. No API keys. The embedding model runs on CPU and weighs 
 - **Background agent** — tails `~/.claude/projects/*.jsonl`, drops a hint markdown per session, tracks which suggestions you actually invoke.
 - **GitHub onboarding** — `toolhub add <url>` clones any tool repo, auto-detects its kind, and ingests its tools.
 - **Interactive TUI** — `ratatui` dashboard with search, type filter, and `$EDITOR` jump.
+- **Local web UI** — `toolhub serve` opens a loopback dashboard with catalog browser, debounced recommend box, live SSE suggestions feed, and stats. Same single binary; htmx + askama, no Node, no build step.
 
 ---
 
@@ -77,6 +78,7 @@ cargo install --path crates/cli
 toolhub sync                                              # scan + index every tool
 toolhub recommend "extract design tokens"                 # top-3 hybrid search
 toolhub tui                                               # browse interactively
+toolhub serve --open                                      # local web UI on 127.0.0.1:7777
 toolhub add https://github.com/google-labs-code/stitch    # onboard a new source
 toolhub agent                                             # background hint writer
 ```
@@ -146,6 +148,12 @@ Outcome heuristic per `tool_use` event: `success` (clean `tool_result`), `failur
 |---|---|
 | `toolhub mcp` | Run the stdio MCP server. JSON-RPC on stdin/stdout, logs on stderr. Built on `rmcp` 1.6 with `tool_router` macros. |
 
+### Local web UI
+
+| Command | Purpose |
+|---|---|
+| `toolhub serve [--port 7777] [--host 127.0.0.1] [--open]` | Loopback-only `axum` server. Five pages: `/catalog` (filter/search/detail), `/recommend` (debounced top-3), `/suggestions` (live SSE feed of agent suggestions, in-place acceptance flips), `/stats` (acceptance %, top tools, dead weight, sources), `/sources` (one-click rescan). Reads the same SQLite DB the CLI uses; embedder loads lazily on a blocking thread, so first `/api/recommend` call blocks ~3-5 s while the model warms. Run alongside `toolhub agent` in a separate pane to watch live suggestions. |
+
 ---
 
 ## Configuration
@@ -172,13 +180,15 @@ Outcome heuristic per `tool_use` event: `success` (clean `tool_result`), `failur
 | MCP server | `rmcp` 1.6 (`server`, `transport-io`, `macros`, `schemars`) |
 | FS watcher | `notify-rs` 6.1 |
 | TUI | `ratatui` 0.29 + `crossterm` 0.28 |
+| Web UI | `axum` 0.7 + `askama` 0.12 + `rust-embed` 8 + htmx 2.0.4 + htmx-ext-sse 2.2.2 (vendored, embedded) |
+| Connection pool | `r2d2` 0.8 + `r2d2_sqlite` 0.25 (axum handlers run DB work inside `spawn_blocking`) |
 | CLI | `clap` (derive) + `tokio` |
 
 ---
 
 ## Architecture
 
-Workspace with seven crates: `core` (domain types), `storage` (SQLite + migrations), `ingestion` (parsers + onboarding), `recommender` (embed + hybrid search + rerank), `mcp-server`, `agent` (background loop), and `cli` (binary entry point named `toolhub`).
+Workspace with eight crates: `core` (domain types), `storage` (SQLite + migrations + r2d2 pool), `ingestion` (parsers, onboarding, shared `discover_all` + `run_sync` + `persist_tools`), `recommender` (embed + hybrid search + rerank), `mcp-server`, `agent` (background loop + shared `top_k`), `web` (axum + askama + htmx web UI), and `cli` (binary entry point named `toolhub`).
 
 Eight tables: `tools`, `usage_events`, `tool_scores`, `sources`, `tools_fts` (FTS5), `tools_vec` (vec0), `embeddings`, `agent_suggestions`. Six migrations.
 
@@ -187,11 +197,12 @@ Performance budgets: cold-start CLI <30 ms, `recommend` <50 ms over 60 tools, re
 <!--
 crates/
   core/          domain types, traits, errors
-  storage/       SQLite + migrations + sqlite-vec wrapper
-  ingestion/     parsers + onboard pipeline
+  storage/       SQLite + migrations + sqlite-vec wrapper + r2d2 pool
+  ingestion/     parsers + onboard pipeline + persist_tools + run_sync
   recommender/   embed, hybrid search, reranker
   mcp-server/    rmcp 1.6 stdio server
   agent/         daily-task agent loop
+  web/           axum + askama + htmx local web UI (rust-embed static assets)
   cli/           binary entry point (name: toolhub)
 -->
 
@@ -199,9 +210,11 @@ crates/
 
 ## Roadmap
 
-What's next: a Tauri 2 desktop GUI with usage timelines, category heatmaps, and dependency graphs.
+Phase 7 (local web UI on `toolhub serve`) shipped — see the **Local web UI** command above. Originally scoped as a Tauri 2 desktop app; pivoted to an axum + htmx loopback dashboard to keep the single-binary story.
 
 Three deferred polish items (orthogonal, will land any time): cost extraction from JSONL `usage` field, optional Anthropic-SDK README distillation in `add`, and a Haiku 4.5 task classifier in front of the embedder.
+
+Optional future work: a thin browser extension that talks to the same `/api/*` routes from claude.ai, and per-source CRUD (add/update/remove) exposed in the web UI alongside the existing CLI commands.
 
 ---
 
@@ -210,8 +223,10 @@ Three deferred polish items (orthogonal, will land any time): cost extraction fr
 ```bash
 cargo build                                 # debug
 cargo build --release                       # release, ~30 s cold
-cargo test --workspace                      # all tests (68+)
+cargo test --workspace                      # all tests (138+)
 cargo test -p toolhub-mcp-server            # MCP handler tests
+cargo test -p toolhub-web --test routes     # web route integration tests
+cargo test -p toolhub-web --test sse        # live SSE end-to-end test
 cargo test -p toolhub-cli --bins            # TUI logic tests
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check

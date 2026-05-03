@@ -3,15 +3,18 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 mod commands {
+    pub mod add;
     pub mod dead_weight;
     pub mod list;
     pub mod mcp;
     pub mod persist;
     pub mod recommend;
+    pub mod remove;
     pub mod score;
     pub mod stats;
     pub mod sync;
     pub mod tui;
+    pub mod update;
 }
 mod db_path;
 mod tui;
@@ -70,6 +73,21 @@ enum Cmd {
         #[arg(long, default_value_t = 30)]
         days: u32,
     },
+    /// Onboard a tool source from a GitHub URL (clones repo, registers tools)
+    Add {
+        /// GitHub URL: https://github.com/owner/repo, gh:owner/repo, git@…
+        url: String,
+    },
+    /// Re-pull one (or every) registered github source and refresh tools
+    Update {
+        /// Source id, e.g. `gh:owner/repo`. Omit to update every github source.
+        source: Option<String>,
+    },
+    /// Drop every tool ingested from a source + delete the source row
+    Remove {
+        /// Source id, e.g. `gh:owner/repo`.
+        source: String,
+    },
 }
 
 #[tokio::main]
@@ -95,5 +113,8 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Score { sessions_dir } => commands::score::run(sessions_dir).await,
         Cmd::Stats { tool, top, json } => commands::stats::run(tool, top, json).await,
         Cmd::DeadWeight { days } => commands::dead_weight::run(days).await,
+        Cmd::Add { url } => commands::add::run(url).await,
+        Cmd::Update { source } => commands::update::run(source).await,
+        Cmd::Remove { source } => commands::remove::run(source).await,
     }
 }

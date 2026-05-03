@@ -9,6 +9,12 @@ See the [workspace README](https://github.com/deiu25/quiver#readme) for install 
 ## Install
 
 ```bash
+cargo install toolhub
+```
+
+Or from a clone of the workspace:
+
+```bash
 cargo install --path crates/cli
 ```
 

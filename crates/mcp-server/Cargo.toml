@@ -4,12 +4,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "rmcp stdio MCP server exposing toolhub tools to Claude Code"
 
 [dependencies]
-toolhub-core = { path = "../core" }
-toolhub-storage = { path = "../storage" }
-toolhub-recommender = { path = "../recommender" }
-toolhub-ingestion = { path = "../ingestion" }
+toolhub-core = { path = "../core", version = "0.1.0" }
+toolhub-storage = { path = "../storage", version = "0.1.0" }
+toolhub-recommender = { path = "../recommender", version = "0.1.0" }
+toolhub-ingestion = { path = "../ingestion", version = "0.1.0" }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 rmcp = { workspace = true }

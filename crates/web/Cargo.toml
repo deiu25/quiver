@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Loopback axum + askama + htmx web UI for toolhub"
 
 [features]
 default = []
@@ -11,11 +12,11 @@ default = []
 debug-embed = ["rust-embed/debug-embed"]
 
 [dependencies]
-toolhub-core = { path = "../core" }
-toolhub-storage = { path = "../storage" }
-toolhub-recommender = { path = "../recommender" }
-toolhub-agent = { path = "../agent" }
-toolhub-ingestion = { path = "../ingestion" }
+toolhub-core = { path = "../core", version = "0.1.0" }
+toolhub-storage = { path = "../storage", version = "0.1.0" }
+toolhub-recommender = { path = "../recommender", version = "0.1.0" }
+toolhub-agent = { path = "../agent", version = "0.1.0" }
+toolhub-ingestion = { path = "../ingestion", version = "0.1.0" }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }

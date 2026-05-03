@@ -1,5 +1,5 @@
 [package]
-name = "toolhub-cli"
+name = "toolhub"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,13 +16,13 @@ name = "toolhub"
 path = "src/main.rs"
 
 [dependencies]
-toolhub-core = { path = "../core" }
-toolhub-storage = { path = "../storage" }
-toolhub-ingestion = { path = "../ingestion" }
-toolhub-recommender = { path = "../recommender" }
-toolhub-mcp-server = { path = "../mcp-server" }
-toolhub-agent = { path = "../agent" }
-toolhub-web = { path = "../web" }
+toolhub-core = { path = "../core", version = "0.1.0" }
+toolhub-storage = { path = "../storage", version = "0.1.0" }
+toolhub-ingestion = { path = "../ingestion", version = "0.1.0" }
+toolhub-recommender = { path = "../recommender", version = "0.1.0" }
+toolhub-mcp-server = { path = "../mcp-server", version = "0.1.0" }
+toolhub-agent = { path = "../agent", version = "0.1.0" }
+toolhub-web = { path = "../web", version = "0.1.0" }
 clap = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }

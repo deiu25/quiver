@@ -3954,27 +3954,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
-name = "toolhub-agent"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "notify",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "toolhub-core",
- "toolhub-ingestion",
- "toolhub-recommender",
- "toolhub-storage",
- "tracing",
- "walkdir",
-]
-
-[[package]]
-name = "toolhub-cli"
+name = "toolhub"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3995,6 +3975,26 @@ dependencies = [
  "toolhub-web",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
+]
+
+[[package]]
+name = "toolhub-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "notify",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toolhub-core",
+ "toolhub-ingestion",
+ "toolhub-recommender",
+ "toolhub-storage",
+ "tracing",
  "walkdir",
 ]
 

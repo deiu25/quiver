@@ -213,7 +213,7 @@ crates/
 
 Phase 7 (local web UI on `toolhub serve`) shipped — see the **Local web UI** command above. Originally scoped as a Tauri 2 desktop app; pivoted to an axum + htmx loopback dashboard to keep the single-binary story.
 
-The v0.1 hardening pass landed CI (fmt + clippy + workspace tests on every push), a 50-task recommender relevance benchmark with a ≥80% top-3 acceptance gate (see [Benchmark](#benchmark)), and crates.io-ready packaging metadata on `toolhub-cli`.
+The v0.1 hardening pass landed CI (fmt + clippy + workspace tests on every push), a 50-task recommender relevance benchmark with a ≥80% top-3 acceptance gate (see [Benchmark](#benchmark)), and crates.io-ready packaging metadata on the `toolhub` binary crate.
 
 Three deferred polish items (orthogonal, will land any time): cost extraction from JSONL `usage` field, optional Anthropic-SDK README distillation in `add`, and a Haiku 4.5 task classifier in front of the embedder.
 
@@ -242,7 +242,7 @@ cargo test --workspace                      # all tests (138+)
 cargo test -p toolhub-mcp-server            # MCP handler tests
 cargo test -p toolhub-web --test routes     # web route integration tests
 cargo test -p toolhub-web --test sse        # live SSE end-to-end test
-cargo test -p toolhub-cli --bins            # TUI logic tests
+cargo test -p toolhub --bins                # TUI logic tests
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```

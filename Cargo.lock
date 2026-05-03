@@ -3418,6 +3418,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "toolhub-core",
+ "toolhub-ingestion",
  "toolhub-recommender",
  "toolhub-storage",
  "tracing",

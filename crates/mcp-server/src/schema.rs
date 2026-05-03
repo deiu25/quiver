@@ -114,8 +114,12 @@ pub struct AddSourceParams {
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct AddSourceResult {
     pub source_id: String,
+    pub web_url: String,
+    pub repo_type: String,
+    pub tools_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit_sha: Option<String>,
     pub status: &'static str,
-    pub note: &'static str,
 }
 
 // ─── usage_stats ────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use anyhow::{Context, anyhow};
+use chrono::Utc;
 use rmcp::ErrorData;
 use rmcp::ServiceExt;
 use rmcp::handler::server::wrapper::Parameters;
@@ -12,6 +13,7 @@ use rmcp::transport::stdio;
 use rmcp::{tool, tool_router};
 use rusqlite::Connection;
 
+use toolhub_ingestion::github_repo;
 use toolhub_recommender::embed::Embedder;
 use toolhub_recommender::params::{
     COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
@@ -214,20 +216,81 @@ impl ToolHubServer {
     }
 
     #[tool(
-        description = "Register a tool source (GitHub repo / URL) for later sync. \
-                       Phase 3 only records the row; actual fetch lands in Phase 5."
+        description = "Onboard a GitHub repo: shallow-clone, classify (skill/plugin/mcp/cli/doc), \
+                       parse, persist tools + embeddings, and record the source for later sync."
     )]
-    fn add_source(&self, Parameters(p): Parameters<AddSourceParams>) -> Result<String, ErrorData> {
-        let conn = self.state.conn.lock().map_err(|e| err(anyhow!("{e}")))?;
+    async fn add_source(
+        &self,
+        Parameters(p): Parameters<AddSourceParams>,
+    ) -> Result<String, ErrorData> {
+        // Only github type is wired up in Phase 5; other hints fall through.
         let type_ = p.r#type.as_deref().unwrap_or("github");
-        let id = derive_source_id(type_, &p.url);
-        sources::upsert(&conn, &id, type_, &p.url).map_err(err)?;
-        let result = AddSourceResult {
-            source_id: id,
+        if type_ != "github" {
+            return Err(err(anyhow!(
+                "only type=\"github\" is supported in Phase 5 (got {type_:?})"
+            )));
+        }
+
+        let result = github_repo::onboard(&p.url).await.map_err(err)?;
+        let n = result.tools.len();
+
+        if n > 0 {
+            let q_emb = {
+                let mut emb = self
+                    .state
+                    .embedder
+                    .lock()
+                    .map_err(|e| err(anyhow!("{e}")))?;
+                if emb.is_none() {
+                    tracing::info!("loading fastembed model (one-time)");
+                    *emb = Some(Embedder::new().map_err(err)?);
+                }
+                let texts: Vec<String> = result.tools.iter().map(embed_text_for).collect();
+                emb.as_ref()
+                    .expect("embedder just initialized")
+                    .embed_batch(texts)
+                    .map_err(err)?
+            };
+
+            let conn = self.state.conn.lock().map_err(|e| err(anyhow!("{e}")))?;
+            for meta in &result.tools {
+                tools::upsert(&conn, meta).map_err(err)?;
+            }
+            fts::rebuild(&conn).map_err(err)?;
+            for (m, v) in result.tools.iter().zip(&q_emb) {
+                embeddings::upsert(&conn, &m.id, v).map_err(err)?;
+            }
+            sources::upsert_full(
+                &conn,
+                &result.source_id,
+                "github",
+                &result.web_url,
+                Utc::now(),
+                result.commit_sha.as_deref(),
+            )
+            .map_err(err)?;
+        } else {
+            let conn = self.state.conn.lock().map_err(|e| err(anyhow!("{e}")))?;
+            sources::upsert_full(
+                &conn,
+                &result.source_id,
+                "github",
+                &result.web_url,
+                Utc::now(),
+                result.commit_sha.as_deref(),
+            )
+            .map_err(err)?;
+        }
+
+        let out = AddSourceResult {
+            source_id: result.source_id,
+            web_url: result.web_url,
+            repo_type: format!("{:?}", result.repo_type),
+            tools_count: n,
+            commit_sha: result.commit_sha,
             status: "registered",
-            note: "Phase 3 stub — fetch + parse lands in Phase 5.",
         };
-        serde_json::to_string(&result).map_err(|e| err(anyhow!(e)))
+        serde_json::to_string(&out).map_err(|e| err(anyhow!(e)))
     }
 
     #[tool(description = "Aggregated success/cost/duration scores per tool. \
@@ -276,24 +339,12 @@ impl ToolHubServer {
     }
 }
 
-/// Derive a deterministic source id from URL + type.
-fn derive_source_id(type_: &str, url: &str) -> String {
-    if type_ == "github" {
-        // gh:owner/repo
-        if let Some(rest) = url
-            .trim_end_matches('/')
-            .trim_end_matches(".git")
-            .strip_prefix("https://github.com/")
-            .or_else(|| {
-                url.trim_end_matches('/')
-                    .trim_end_matches(".git")
-                    .strip_prefix("git@github.com:")
-            })
-        {
-            return format!("gh:{rest}");
-        }
-    }
-    format!("{type_}:{url}")
+/// Concatenate name + description + triggers — same blend `sync` and `add` use,
+/// so the embedding produced by `add_source` matches what `recommend` expects.
+fn embed_text_for(m: &toolhub_core::tool::ToolMeta) -> String {
+    let desc = m.description.as_deref().unwrap_or("");
+    let triggers = m.triggers.join(", ");
+    format!("{}\n{}\n{}", m.name, desc, triggers)
 }
 
 /// Run the server on stdio. Blocks until the client disconnects.
@@ -405,24 +456,16 @@ mod tests {
         assert_eq!(v[0]["tool_id"], "skill:design-md");
     }
 
-    #[test]
-    fn add_source_writes_row_with_derived_id() {
+    #[tokio::test]
+    async fn add_source_rejects_non_github_type() {
         let (server, _dir) = make_server();
-        let out = server
+        let res = server
             .add_source(Parameters(AddSourceParams {
-                url: "https://github.com/foo/bar".into(),
-                r#type: None,
+                url: "https://example.com/foo.tar.gz".into(),
+                r#type: Some("url".into()),
             }))
-            .unwrap();
-        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
-        assert_eq!(v["source_id"], "gh:foo/bar");
-        assert_eq!(v["status"], "registered");
-
-        let conn = server.state.conn.lock().unwrap();
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM sources", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(count, 1);
+            .await;
+        assert!(res.is_err(), "expected error for non-github type");
     }
 
     #[test]
@@ -476,37 +519,5 @@ mod tests {
         assert_eq!(events[0]["outcome"], "success");
         assert_eq!(events[0]["session_id"], "sess-1");
         assert_eq!(events[0]["project"], "quiver");
-    }
-
-    #[test]
-    fn derive_source_id_github_https() {
-        assert_eq!(
-            derive_source_id("github", "https://github.com/foo/bar"),
-            "gh:foo/bar"
-        );
-        assert_eq!(
-            derive_source_id("github", "https://github.com/foo/bar.git"),
-            "gh:foo/bar"
-        );
-        assert_eq!(
-            derive_source_id("github", "https://github.com/foo/bar/"),
-            "gh:foo/bar"
-        );
-    }
-
-    #[test]
-    fn derive_source_id_github_ssh() {
-        assert_eq!(
-            derive_source_id("github", "git@github.com:foo/bar.git"),
-            "gh:foo/bar"
-        );
-    }
-
-    #[test]
-    fn derive_source_id_falls_back_for_unknown_type() {
-        assert_eq!(
-            derive_source_id("url", "https://example.com/skill.tar.gz"),
-            "url:https://example.com/skill.tar.gz"
-        );
     }
 }

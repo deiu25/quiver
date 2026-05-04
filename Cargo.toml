@@ -51,4 +51,5 @@ askama = "0.12"
 rust-embed = "8"
 mime_guess = "2"
 webbrowser = "1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+async-trait = "0.1"

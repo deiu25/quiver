@@ -18,6 +18,7 @@ use anyhow::{Context, anyhow};
 use chrono::Utc;
 use quiver_core::tool::{ToolMeta, ToolType};
 
+use crate::llm_extract::MetadataExtractor;
 use crate::{git_clone, plugin_json, skill_md, walker};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -346,8 +347,16 @@ fn read_first_readme(root: &Path) -> Option<String> {
     None
 }
 
-/// Async end-to-end onboarding: clone, classify, parse, return rows.
-pub async fn onboard(url: &str) -> anyhow::Result<OnboardResult> {
+/// Async end-to-end onboarding: clone, classify, parse, enrich, return rows.
+///
+/// `extractor` runs against each tool's README/long_description and only
+/// fills fields that the structured parsers left empty (`triggers`,
+/// `examples`, `category`). Pass [`crate::llm_extract::RegexExtractor`] for
+/// pure-offline behaviour.
+pub async fn onboard(
+    url: &str,
+    extractor: &dyn MetadataExtractor,
+) -> anyhow::Result<OnboardResult> {
     let gh = parse_github_url(url)?;
     let tmp = tempfile::tempdir().context("create tempdir for git clone")?;
     let dest = tmp.path().join("repo");
@@ -356,7 +365,8 @@ pub async fn onboard(url: &str) -> anyhow::Result<OnboardResult> {
         .with_context(|| format!("clone {}", gh.clone_url))?;
     let commit_sha = git_clone::head_sha(&dest).await?;
     let repo_type = detect_repo_type(&dest);
-    let tools = ingest_local(&dest, &gh.web_url)?;
+    let mut tools = ingest_local(&dest, &gh.web_url)?;
+    enrich_with_llm(&mut tools, extractor).await;
     Ok(OnboardResult {
         source_id: gh.source_id,
         clone_url: gh.clone_url,
@@ -365,6 +375,38 @@ pub async fn onboard(url: &str) -> anyhow::Result<OnboardResult> {
         repo_type,
         tools,
     })
+}
+
+/// Fill `triggers`, `examples`, and `category` on each tool from its
+/// README-style body. Only empty fields are touched, so structured parsers
+/// (skill frontmatter etc.) always win. Errors are logged, never raised —
+/// a slow LLM call must not block onboarding.
+pub async fn enrich_with_llm(tools: &mut [ToolMeta], extractor: &dyn MetadataExtractor) {
+    for tool in tools.iter_mut() {
+        if !tool.triggers.is_empty() && !tool.examples.is_empty() && tool.category.is_some() {
+            continue;
+        }
+        let readme = tool.long_description.as_deref().unwrap_or("");
+        if readme.trim().is_empty() {
+            continue;
+        }
+        match extractor.extract(&tool.name, readme).await {
+            Ok(meta) => {
+                if tool.triggers.is_empty() {
+                    tool.triggers = meta.triggers;
+                }
+                if tool.examples.is_empty() {
+                    tool.examples = meta.examples;
+                }
+                if tool.category.is_none() {
+                    tool.category = meta.category;
+                }
+            },
+            Err(e) => {
+                tracing::warn!(tool = %tool.name, "llm extract failed: {e:#}");
+            },
+        }
+    }
 }
 
 #[cfg(test)]

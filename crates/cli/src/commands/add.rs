@@ -7,20 +7,28 @@
 use chrono::Utc;
 
 use quiver_ingestion::github_repo;
+use quiver_ingestion::llm_extract;
 use quiver_ingestion::persist::persist_tools;
 use quiver_recommender::embed::Embedder;
 use quiver_storage::{open, sources};
 
 use crate::db_path::default_db_path;
 
-pub async fn run(url: String) -> anyhow::Result<()> {
+pub async fn run(url: String, no_llm: bool) -> anyhow::Result<()> {
     let db_path = default_db_path()?;
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let conn = open(&db_path)?;
 
-    let result = github_repo::onboard(&url).await?;
+    let force_regex = no_llm
+        || std::env::var("QUIVER_LLM_EXTRACT")
+            .map(|v| v == "0" || v.eq_ignore_ascii_case("false"))
+            .unwrap_or(false);
+    let (extractor, label) = llm_extract::build_default(force_regex);
+    tracing::info!(target: "quiver::onboard", "extractor: {label}");
+
+    let result = github_repo::onboard(&url, extractor.as_ref()).await?;
     let n = result.tools.len();
     let kind = format!("{:?}", result.repo_type);
 

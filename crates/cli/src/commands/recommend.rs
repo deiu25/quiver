@@ -6,10 +6,23 @@ use quiver_recommender::params::{
 use quiver_recommender::rerank::{Reranker, SuccessReranker};
 use quiver_recommender::{embed::Embedder, search};
 use quiver_storage::{embeddings, fts, open, tools};
+use serde::Serialize;
 
 use crate::db_path::default_db_path;
 
-pub async fn run(task: String) -> anyhow::Result<()> {
+/// Mirror of `quiver_mcp_server::schema::RecommendHit` so a `--json` consumer
+/// (e.g. PreToolUse hook) gets the same shape the MCP server returns.
+#[derive(Debug, Serialize)]
+struct RecommendHit {
+    tool_id: String,
+    score: f32,
+    name: String,
+    description: Option<String>,
+    invocation: Option<String>,
+    install_path: Option<String>,
+}
+
+pub async fn run(task: String, json: bool) -> anyhow::Result<()> {
     let conn = open(&default_db_path()?)?;
 
     let embedder = Embedder::new()?;
@@ -22,7 +35,11 @@ pub async fn run(task: String) -> anyhow::Result<()> {
         .collect();
 
     if vec_sims.is_empty() {
-        println!("(empty index — run `quiver sync` first)");
+        if json {
+            println!("[]");
+        } else {
+            println!("(empty index — run `quiver sync` first)");
+        }
         return Ok(());
     }
 
@@ -56,6 +73,27 @@ pub async fn run(task: String) -> anyhow::Result<()> {
         .into_iter()
         .map(|m| (m.id.clone(), m))
         .collect();
+
+    if json {
+        let payload: Vec<RecommendHit> = hits
+            .into_iter()
+            .map(|h| {
+                let meta = by_id.get(&h.tool_id);
+                RecommendHit {
+                    tool_id: h.tool_id.clone(),
+                    score: h.score,
+                    name: meta
+                        .map(|m| m.name.clone())
+                        .unwrap_or_else(|| h.tool_id.clone()),
+                    description: meta.and_then(|m| m.description.clone()),
+                    invocation: meta.and_then(|m| m.invocation.clone()),
+                    install_path: meta.and_then(|m| m.install_path.clone()),
+                }
+            })
+            .collect();
+        println!("{}", serde_json::to_string(&payload)?);
+        return Ok(());
+    }
 
     println!("{:>6}  {:<40}  description", "score", "id");
     println!("{}", "-".repeat(96));

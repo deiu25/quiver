@@ -18,8 +18,12 @@ chrono = { workspace = true }
 rusqlite = { workspace = true }
 walkdir = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs", "process"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs", "process", "time"] }
 tracing = { workspace = true }
+reqwest = { workspace = true }
+async-trait = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs", "process", "time", "test-util"] }

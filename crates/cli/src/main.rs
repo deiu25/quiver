@@ -43,6 +43,9 @@ enum Cmd {
     Recommend {
         /// Free-text task description
         task: String,
+        /// Emit JSON (matches the MCP `recommend` response shape).
+        #[arg(long)]
+        json: bool,
     },
     /// Show details for a tool by id
     Info {
@@ -80,6 +83,10 @@ enum Cmd {
     Add {
         /// GitHub URL: https://github.com/owner/repo, gh:owner/repo, git@…
         url: String,
+        /// Skip LLM-assisted metadata extraction (regex fallback only).
+        /// Equivalent to `QUIVER_LLM_EXTRACT=0`.
+        #[arg(long)]
+        no_llm: bool,
     },
     /// Re-pull one (or every) registered github source and refresh tools
     Update {
@@ -140,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.cmd {
         Cmd::List => commands::list::run().await,
         Cmd::Sync => commands::sync::run().await,
-        Cmd::Recommend { task } => commands::recommend::run(task).await,
+        Cmd::Recommend { task, json } => commands::recommend::run(task, json).await,
         Cmd::Info { id } => {
             println!("info({id:?}): not yet implemented (Phase 1 follow-up)");
             Ok(())
@@ -150,7 +157,7 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Score { sessions_dir } => commands::score::run(sessions_dir).await,
         Cmd::Stats { tool, top, json } => commands::stats::run(tool, top, json).await,
         Cmd::DeadWeight { days } => commands::dead_weight::run(days).await,
-        Cmd::Add { url } => commands::add::run(url).await,
+        Cmd::Add { url, no_llm } => commands::add::run(url, no_llm).await,
         Cmd::Update { source } => commands::update::run(source).await,
         Cmd::Remove { source } => commands::remove::run(source).await,
         Cmd::Agent {

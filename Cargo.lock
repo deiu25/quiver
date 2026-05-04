@@ -2735,10 +2735,13 @@ name = "quiver-ingestion"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "axum",
  "chrono",
  "quiver-core",
  "quiver-recommender",
  "quiver-storage",
+ "reqwest",
  "rusqlite",
  "serde",
  "serde_json",

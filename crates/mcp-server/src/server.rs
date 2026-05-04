@@ -14,6 +14,7 @@ use rmcp::{tool, tool_router};
 use rusqlite::Connection;
 
 use quiver_ingestion::github_repo;
+use quiver_ingestion::llm_extract;
 use quiver_recommender::embed::Embedder;
 use quiver_recommender::params::{
     COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
@@ -231,7 +232,13 @@ impl QuiverServer {
             )));
         }
 
-        let result = github_repo::onboard(&p.url).await.map_err(err)?;
+        let force_regex = std::env::var("QUIVER_LLM_EXTRACT")
+            .map(|v| v == "0" || v.eq_ignore_ascii_case("false"))
+            .unwrap_or(false);
+        let (extractor, _label) = llm_extract::build_default(force_regex);
+        let result = github_repo::onboard(&p.url, extractor.as_ref())
+            .await
+            .map_err(err)?;
         let n = result.tools.len();
 
         if n > 0 {

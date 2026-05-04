@@ -1,6 +1,7 @@
 pub mod cost;
 pub mod git_clone;
 pub mod github_repo;
+pub mod llm_extract;
 pub mod mcp_json;
 pub mod persist;
 pub mod plugin_json;

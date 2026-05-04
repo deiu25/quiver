@@ -26,6 +26,8 @@ use chrono::{DateTime, Utc};
 use quiver_core::usage::{Outcome, UsageEvent};
 use serde_json::Value;
 
+use crate::cost;
+
 const TASK_TEXT_MAX: usize = 500;
 
 /// Tool names that Claude Code provides directly — not catalogued.
@@ -101,6 +103,7 @@ struct PendingToolUse {
     session_id: Option<String>,
     project: Option<String>,
     occurred_at: DateTime<Utc>,
+    cost_usd: Option<f64>,
 }
 
 /// Parse one JSONL session file → ordered list of `UsageEvent`s.
@@ -193,19 +196,39 @@ pub fn replay(path: &Path) -> anyhow::Result<Vec<UsageEvent>> {
                     .and_then(|c| c.as_array())
                     .cloned()
                     .unwrap_or_default();
-                for block in content {
+
+                // Pre-compute total cost for this assistant message so we can
+                // distribute it across catalogued tool_use blocks pro-rata.
+                let model = v
+                    .pointer("/message/model")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("");
+                let total_cost = v
+                    .pointer("/message/usage")
+                    .map(cost::parse_usage)
+                    .and_then(|u| cost::compute_cost_usd(model, &u));
+
+                // Collect catalogued tool_use blocks first to know N for the split.
+                let mut blocks: Vec<(String, String)> = Vec::new();
+                for block in &content {
                     if block.get("type").and_then(|s| s.as_str()) != Some("tool_use") {
                         continue;
                     }
-                    let id = match block.get("id").and_then(|s| s.as_str()) {
-                        Some(s) => s.to_string(),
-                        None => continue,
+                    let Some(id) = block.get("id").and_then(|s| s.as_str()) else {
+                        continue;
                     };
                     let name = block.get("name").and_then(|s| s.as_str()).unwrap_or("");
                     let input = block.get("input").cloned().unwrap_or(Value::Null);
                     let Some(tool_id) = map_tool_id(name, &input) else {
                         continue;
                     };
+                    blocks.push((id.to_string(), tool_id));
+                }
+                let per_tool_cost = match (total_cost, blocks.len()) {
+                    (Some(c), n) if n > 0 => Some(c / n as f64),
+                    _ => None,
+                };
+                for (id, tool_id) in blocks {
                     let pu = PendingToolUse {
                         uuid: id.clone(),
                         tool_id,
@@ -213,6 +236,7 @@ pub fn replay(path: &Path) -> anyhow::Result<Vec<UsageEvent>> {
                         session_id: session_id.clone(),
                         project: project.clone(),
                         occurred_at: ts,
+                        cost_usd: per_tool_cost,
                     };
                     pending.insert(id.clone(), pu);
                     order.push(id);
@@ -240,7 +264,7 @@ pub fn replay(path: &Path) -> anyhow::Result<Vec<UsageEvent>> {
             task_text: pu.task_text,
             outcome,
             duration_ms: None,
-            cost_usd: None,
+            cost_usd: pu.cost_usd,
             occurred_at: pu.occurred_at,
         });
     }
@@ -393,6 +417,60 @@ mod tests {
         let events = replay(&path).unwrap();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].outcome, Outcome::Abandoned);
+    }
+
+    #[test]
+    fn replay_extracts_cost_from_assistant_usage() {
+        // 100k input @ $15/M = $1.50; 10k output @ $75/M = $0.75. Total = $2.25.
+        // Two tool_use blocks → $1.125 each.
+        let (_d, path) = write_fixture(&[json!({
+            "type": "assistant",
+            "timestamp": "2026-05-03T12:00:00Z",
+            "sessionId": "sess",
+            "message": {
+                "model": "claude-opus-4-7",
+                "usage": {
+                    "input_tokens": 100_000,
+                    "output_tokens": 10_000,
+                    "cache_read_input_tokens": 0,
+                    "cache_creation": {
+                        "ephemeral_5m_input_tokens": 0,
+                        "ephemeral_1h_input_tokens": 0
+                    }
+                },
+                "content": [
+                    {"type": "tool_use", "id": "t1", "name": "Skill",
+                     "input": {"skill": "alpha"}},
+                    {"type": "tool_use", "id": "t2", "name": "mcp__foo__bar",
+                     "input": {}}
+                ]
+            }
+        })]);
+        let events = replay(&path).unwrap();
+        assert_eq!(events.len(), 2);
+        let c0 = events[0].cost_usd.unwrap();
+        let c1 = events[1].cost_usd.unwrap();
+        assert!((c0 - 1.125).abs() < 1e-9, "got {c0}");
+        assert!((c1 - 1.125).abs() < 1e-9, "got {c1}");
+    }
+
+    #[test]
+    fn replay_unknown_model_yields_no_cost() {
+        let (_d, path) = write_fixture(&[json!({
+            "type": "assistant",
+            "timestamp": "2026-05-03T12:00:00Z",
+            "message": {
+                "model": "gpt-4-turbo",
+                "usage": {"input_tokens": 100, "output_tokens": 10},
+                "content": [
+                    {"type": "tool_use", "id": "x", "name": "Skill",
+                     "input": {"skill": "y"}}
+                ]
+            }
+        })]);
+        let events = replay(&path).unwrap();
+        assert_eq!(events.len(), 1);
+        assert!(events[0].cost_usd.is_none());
     }
 
     #[test]

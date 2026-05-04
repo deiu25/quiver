@@ -22,6 +22,8 @@
       <th>Tool</th>
       <th>Success rate</th>
       <th>Samples</th>
+      <th>Avg cost</th>
+      <th>Total cost</th>
       <th>Combined</th>
     </tr>
   </thead>
@@ -34,6 +36,8 @@
         <span class="score">{{ r.success_rate_pct }}%</span>
       </td>
       <td class="score">{{ r.sample_size }}</td>
+      <td class="score">{{ r.avg_cost_str }}</td>
+      <td class="score">{{ r.total_cost_str }}</td>
       <td class="score">{{ r.combined_str }}</td>
     </tr>
     {% endfor %}

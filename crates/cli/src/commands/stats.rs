@@ -16,8 +16,16 @@ struct StatsRow {
     success_rate: Option<f64>,
     sample_size: Option<i64>,
     avg_cost_usd: Option<f64>,
+    total_cost_usd: Option<f64>,
     median_duration_ms: Option<i64>,
     last_used: Option<String>,
+}
+
+fn total_cost(avg: Option<f64>, n: Option<i64>) -> Option<f64> {
+    match (avg, n) {
+        (Some(a), Some(n)) if n > 0 => Some(a * n as f64),
+        _ => None,
+    }
 }
 
 #[derive(Serialize)]
@@ -69,12 +77,14 @@ pub async fn run(tool: Option<String>, top: usize, json: bool) -> anyhow::Result
         .into_iter()
         .map(|s| {
             let name = tools::get(&conn, &s.tool_id).ok().flatten().map(|m| m.name);
+            let total = total_cost(s.avg_cost_usd, s.sample_size);
             StatsRow {
                 tool_id: s.tool_id,
                 name,
                 success_rate: s.success_rate,
                 sample_size: s.sample_size,
                 avg_cost_usd: s.avg_cost_usd,
+                total_cost_usd: total,
                 median_duration_ms: s.median_duration_ms,
                 last_used: None,
             }
@@ -107,6 +117,7 @@ fn build_row(conn: &rusqlite::Connection, id: &str) -> anyhow::Result<StatsRow> 
             success_rate: s.success_rate,
             sample_size: s.sample_size,
             avg_cost_usd: s.avg_cost_usd,
+            total_cost_usd: total_cost(s.avg_cost_usd, s.sample_size),
             median_duration_ms: s.median_duration_ms,
             last_used: last,
         },
@@ -116,6 +127,7 @@ fn build_row(conn: &rusqlite::Connection, id: &str) -> anyhow::Result<StatsRow> 
             success_rate: None,
             sample_size: None,
             avg_cost_usd: None,
+            total_cost_usd: None,
             median_duration_ms: None,
             last_used: last,
         },
@@ -131,8 +143,12 @@ fn print_table(rows: &[StatsRow]) {
     let header_name = "NAME";
     let header_rate = "RATE";
     let header_n = "N";
+    let header_cost = "COST($)";
     let header_med = "MED_MS";
-    println!("{header_id:<40} {header_name:<28} {header_rate:>6} {header_n:>8} {header_med:>10}");
+    println!(
+        "{header_id:<40} {header_name:<28} {header_rate:>6} {header_n:>8} {header_cost:>10} \
+         {header_med:>10}"
+    );
     for r in rows {
         let rate = r
             .success_rate
@@ -142,17 +158,22 @@ fn print_table(rows: &[StatsRow]) {
             .sample_size
             .map(|v| v.to_string())
             .unwrap_or_else(|| "—".into());
+        let cost = r
+            .total_cost_usd
+            .map(|v| format!("{v:.4}"))
+            .unwrap_or_else(|| "—".into());
         let dur = r
             .median_duration_ms
             .map(|v| v.to_string())
             .unwrap_or_else(|| "—".into());
         let name = r.name.as_deref().unwrap_or("(unknown)");
         println!(
-            "{:<40} {:<28} {:>6} {:>8} {:>10}",
+            "{:<40} {:<28} {:>6} {:>8} {:>10} {:>10}",
             truncate_inline(&r.tool_id, 40),
             truncate_inline(name, 28),
             rate,
             n,
+            cost,
             dur
         );
     }
@@ -177,6 +198,12 @@ fn print_detail(d: &StatsDetail) {
     println!(
         "avg cost   : {}",
         r.avg_cost_usd
+            .map(|v| format!("${v:.4}"))
+            .unwrap_or_else(|| "—".into())
+    );
+    println!(
+        "total cost : {}",
+        r.total_cost_usd
             .map(|v| format!("${v:.4}"))
             .unwrap_or_else(|| "—".into())
     );

@@ -40,6 +40,8 @@ pub struct TopToolView {
     pub tool_id: String,
     pub success_rate_pct: String,
     pub sample_size: i64,
+    pub avg_cost_str: String,
+    pub total_cost_str: String,
     pub combined_str: String,
     pub bar_width_px: i64,
 }
@@ -93,7 +95,7 @@ fn load(conn: &Connection) -> anyhow::Result<StatsData> {
     };
 
     let score_rows = scores::list(conn, None)?;
-    let mut combined: Vec<(String, f64, i64, f64)> = score_rows
+    let mut combined: Vec<(String, f64, i64, f64, Option<f64>)> = score_rows
         .into_iter()
         .filter_map(|s| {
             let rate = s.success_rate?;
@@ -102,7 +104,7 @@ fn load(conn: &Connection) -> anyhow::Result<StatsData> {
                 return None;
             }
             let weighted = rate * ((n as f64) + 1.0).ln();
-            Some((s.tool_id, rate, n, weighted))
+            Some((s.tool_id, rate, n, weighted, s.avg_cost_usd))
         })
         .collect();
     combined.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal));
@@ -110,12 +112,22 @@ fn load(conn: &Connection) -> anyhow::Result<StatsData> {
     let max_combined = combined.first().map(|c| c.3).unwrap_or(1.0).max(1e-9);
     let top_tools: Vec<TopToolView> = combined
         .into_iter()
-        .map(|(tool_id, rate, n, w)| TopToolView {
-            tool_id,
-            success_rate_pct: format!("{:.0}", rate * 100.0),
-            sample_size: n,
-            combined_str: format!("{w:.2}"),
-            bar_width_px: ((w / max_combined) * 80.0).round() as i64,
+        .map(|(tool_id, rate, n, w, avg_cost)| {
+            let avg_cost_str = avg_cost
+                .map(|c| format!("${c:.4}"))
+                .unwrap_or_else(|| "—".to_string());
+            let total_cost_str = avg_cost
+                .map(|c| format!("${:.4}", c * n as f64))
+                .unwrap_or_else(|| "—".to_string());
+            TopToolView {
+                tool_id,
+                success_rate_pct: format!("{:.0}", rate * 100.0),
+                sample_size: n,
+                avg_cost_str,
+                total_cost_str,
+                combined_str: format!("{w:.2}"),
+                bar_width_px: ((w / max_combined) * 80.0).round() as i64,
+            }
         })
         .collect();
 

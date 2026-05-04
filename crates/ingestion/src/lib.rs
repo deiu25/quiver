@@ -1,3 +1,4 @@
+pub mod cost;
 pub mod git_clone;
 pub mod github_repo;
 pub mod mcp_json;

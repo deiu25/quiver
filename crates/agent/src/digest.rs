@@ -66,6 +66,24 @@ fn render(
         out.push('\n');
     }
 
+    out.push_str(&format!("## Top spend (last {days} day(s))\n\n"));
+    let spend = scores::top_by_cost(conn, cutoff, 20)?;
+    if spend.is_empty() {
+        out.push_str(
+            "_No cost-tagged events in the window — re-run `quiver score` to backfill._\n\n",
+        );
+    } else {
+        out.push_str("| tool_id | total ($) | samples |\n");
+        out.push_str("|---|---:|---:|\n");
+        for r in &spend {
+            out.push_str(&format!(
+                "| {} | {:.4} | {} |\n",
+                r.tool_id, r.total_cost_usd, r.samples
+            ));
+        }
+        out.push('\n');
+    }
+
     out.push_str("## Suggestion acceptance\n\n");
     let (suggested, accepted) = suggestions::acceptance_stats(conn, cutoff)?;
     if suggested == 0 {
@@ -201,6 +219,7 @@ mod tests {
         let body = digest(&path, 7, None).unwrap();
         for header in [
             "## Top tools",
+            "## Top spend",
             "## Suggestion acceptance",
             "## Dead weight",
             "## New arrivals",
@@ -208,8 +227,49 @@ mod tests {
             assert!(body.contains(header), "missing {header} in:\n{body}");
         }
         assert!(body.contains("No usage events"));
+        assert!(body.contains("No cost-tagged events"));
         assert!(body.contains("No suggestions"));
         assert!(body.contains("No new tools onboarded"));
+    }
+
+    #[test]
+    fn top_spend_section_lists_costs() {
+        let (_d, path) = open_tmp();
+        let conn = open(&path).unwrap();
+        let now = Utc::now();
+        let recent = now - Duration::hours(2);
+        seed_tool(&conn, "skill:expensive", recent);
+        seed_tool(&conn, "skill:cheap", recent);
+
+        let mk = |uuid: &str, tool: &str, cost: f64| UsageEvent {
+            uuid: Some(uuid.into()),
+            tool_id: tool.into(),
+            session_id: Some("s".into()),
+            project: Some("p".into()),
+            task_text: None,
+            outcome: Outcome::Success,
+            duration_ms: None,
+            cost_usd: Some(cost),
+            occurred_at: recent,
+        };
+        usage::insert_event(&conn, &mk("e1", "skill:expensive", 0.50)).unwrap();
+        usage::insert_event(&conn, &mk("e2", "skill:expensive", 0.75)).unwrap();
+        usage::insert_event(&conn, &mk("c1", "skill:cheap", 0.01)).unwrap();
+        drop(conn);
+
+        let body = digest(&path, 7, None).unwrap();
+        let spend_at = body.find("## Top spend").unwrap();
+        let acceptance_at = body.find("## Suggestion acceptance").unwrap();
+        let section = &body[spend_at..acceptance_at];
+        assert!(
+            section.contains("skill:expensive"),
+            "expensive missing: {section}"
+        );
+        assert!(section.contains("1.2500"), "total missing: {section}");
+        // Order: expensive (1.25) before cheap (0.01)
+        let exp = section.find("skill:expensive").unwrap();
+        let cheap = section.find("skill:cheap").unwrap();
+        assert!(exp < cheap, "expensive should rank first");
     }
 
     #[test]

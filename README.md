@@ -104,6 +104,21 @@ Restart Claude Code. Five MCP tools become available mid-session:
 | `add_source(url, type?)` | Clone a repo, ingest its tools, persist a `sources` row. |
 | `usage_stats(tool_id?)` | Read `tool_scores`. Detail mode includes the 5 most-recent events. |
 
+### Recommended Claude Code workflow
+
+To get the most out of Quiver, add this directive to your project's `CLAUDE.md` (or your global `~/.claude/CLAUDE.md`) so Claude consults Quiver before picking a skill, plugin, or subagent:
+
+```markdown
+## Quiver-first tool selection
+
+- Before picking a skill, plugin, or agent for any subtask, call `mcp__quiver__recommend` first with the task description. Use the top-1 result if its `score` ≥ 0.4; else fall back to your own judgement.
+- Applies to: spawning a subagent, invoking a skill, choosing between two viable approaches that map to different installed tools.
+- Skips: trivial built-ins (Read/Edit/Write/Bash/Grep/Glob), tool calls already named in the user's prompt, retries of the same tool within one turn.
+- One `mcp__quiver__recommend` call per subtask boundary — don't re-query for every micro-step.
+```
+
+Why: this closes the feedback loop. Every recommend call logs the top-1 to `agent_suggestions`; acceptance flips when you (or Claude) actually invoke that tool within 60 min, and `recompute_scores` feeds the signal back into the ranker. Without the directive, Claude tends to reach for whatever skill it remembers, and Quiver's learning loop stays cold.
+
 ---
 
 ## Commands

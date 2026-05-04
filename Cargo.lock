@@ -2704,12 +2704,15 @@ name = "quiver-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "axum",
  "chrono",
  "notify",
  "quiver-core",
  "quiver-ingestion",
  "quiver-recommender",
  "quiver-storage",
+ "reqwest",
  "rusqlite",
  "serde",
  "serde_json",

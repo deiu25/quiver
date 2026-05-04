@@ -20,6 +20,9 @@ tracing = { workspace = true }
 walkdir = { workspace = true }
 notify = { workspace = true }
 rusqlite = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+axum = { workspace = true }

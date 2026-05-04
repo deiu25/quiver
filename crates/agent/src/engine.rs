@@ -1,8 +1,11 @@
 //! Agent loop wiring: notify-rs watcher → tail readers → handlers.
 //!
-//! Foreground only — runs until Ctrl-C / SIGTERM. The Anthropic-Haiku
-//! task-classification backend mentioned in PLAN §7 Phase 6 is deferred;
-//! `UserText.text` is sent verbatim to the recommender.
+//! Foreground only — runs until Ctrl-C / SIGTERM. When `cfg.classifier` is
+//! set (via `--classify` / `QUIVER_TASK_CLASSIFIER`), every `UserText` event
+//! is piped through the classifier before the recommender: non-task messages
+//! are dropped silently, real tasks have their text rewritten into a focused
+//! query for embedding. With no classifier set, raw text is sent verbatim
+//! (the original behaviour).
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -107,7 +110,9 @@ pub async fn run(cfg: AgentConfig) -> Result<()> {
                         &mut last_texts,
                         &mut pending,
                         &catalogue,
-                    ) {
+                    )
+                    .await
+                    {
                         tracing::warn!("dispatch failed: {e}");
                     } else {
                         events_since_recompute += 1;
@@ -166,7 +171,7 @@ fn handle_fs_event(ev: &Event, cfg: &AgentConfig, readers: &mut HashMap<PathBuf,
     }
 }
 
-fn dispatch_event(
+async fn dispatch_event(
     ev: TailEvent,
     cfg: &AgentConfig,
     conn: &Connection,
@@ -182,7 +187,18 @@ fn dispatch_event(
             ts,
         } => {
             last_texts.insert(session_id.clone(), text.clone());
-            let hits = top_k(conn, embedder, &text, cfg.top_k)?;
+            let classified = match &cfg.classifier {
+                Some(c) => c.classify(&text).await,
+                None => crate::classify::ClassifiedTask::passthrough(&text),
+            };
+            if !classified.is_task {
+                tracing::debug!(
+                    session = %session_id,
+                    "classifier dropped non-task message"
+                );
+                return Ok(());
+            }
+            let hits = top_k(conn, embedder, &classified.query, cfg.top_k)?;
             if let Err(e) = hint::write_hint(&cfg.hints_dir, &session_id, Some(&text), ts, &hits) {
                 tracing::warn!("write_hint {session_id} failed: {e}");
             }

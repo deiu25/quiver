@@ -6,6 +6,7 @@
 //! marks suggestions accepted when the user actually invokes the suggested
 //! tool. `digest(cfg)` produces a markdown report for a sliding window.
 
+pub mod classify;
 pub mod digest;
 pub mod hint;
 pub mod recommend;
@@ -14,12 +15,14 @@ pub mod tail;
 mod engine;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
+pub use classify::{ClassifiedTask, HaikuClassifier, NoopClassifier, TaskClassifier};
 pub use digest::digest;
 pub use engine::run;
 
 /// Runtime config for the agent loop.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AgentConfig {
     /// SQLite path. Default: `default_db_path()` (caller-provided).
     pub db_path: PathBuf,
@@ -34,6 +37,11 @@ pub struct AgentConfig {
     pub score_recompute_interval_secs: u64,
     /// Number of recommendations to write into the hint file.
     pub top_k: usize,
+    /// Optional task classifier. `None` ⇒ raw user text is sent to the
+    /// recommender verbatim (default). When set, every `UserText` event is
+    /// piped through the classifier first; non-task messages are dropped and
+    /// real tasks are rewritten into a focused query before embedding.
+    pub classifier: Option<Arc<dyn TaskClassifier>>,
 }
 
 impl AgentConfig {
@@ -45,6 +53,12 @@ impl AgentConfig {
             acceptance_window_minutes: 60,
             score_recompute_interval_secs: 60,
             top_k: 3,
+            classifier: None,
         }
+    }
+
+    pub fn with_classifier(mut self, classifier: Arc<dyn TaskClassifier>) -> Self {
+        self.classifier = Some(classifier);
+        self
     }
 }

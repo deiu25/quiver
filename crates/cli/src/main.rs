@@ -107,6 +107,12 @@ enum Cmd {
         /// Where to write `<session>.md` hints (default: $HOME/.claude/hints)
         #[arg(long)]
         hints_dir: Option<PathBuf>,
+        /// Pipe each user message through a Haiku 4.5 task classifier before
+        /// recommending. Filters chit-chat and rewrites prompts into focused
+        /// queries. Requires `ANTHROPIC_API_KEY` or `claude` on PATH.
+        /// Equivalent to `QUIVER_TASK_CLASSIFIER=haiku`.
+        #[arg(long)]
+        classify: bool,
     },
     /// Generate a markdown digest of recent activity (top tools, dead weight,
     /// suggestion acceptance, new arrivals).
@@ -163,7 +169,8 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Agent {
             sessions_dir,
             hints_dir,
-        } => commands::agent::run_cmd(sessions_dir, hints_dir).await,
+            classify,
+        } => commands::agent::run_cmd(sessions_dir, hints_dir, classify).await,
         Cmd::Digest { days, out } => commands::digest::run_cmd(days, out).await,
         Cmd::Serve { port, host, open } => commands::serve::run(host, port, open).await,
     }

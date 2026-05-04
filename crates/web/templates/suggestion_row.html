@@ -5,6 +5,14 @@
     <span class="muted">· session <code>{{ row.session_id }}</code></span>
     <span class="spacer"></span>
     <span class="score">{{ row.suggested_str }} · score {{ row.score_str }}</span>
+    {% if !row.accepted %}
+      <button class="btn-accept"
+              hx-post="/api/suggestions/{{ row.id }}/accept"
+              hx-target="#suggestion-{{ row.id }}"
+              hx-swap="outerHTML">
+        Accept
+      </button>
+    {% endif %}
   </div>
   {% if !row.task_text.is_empty() %}
     <p class="muted">{{ row.task_text }}</p>

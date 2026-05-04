@@ -2,9 +2,11 @@
 
 use askama::Template;
 use axum::Router;
-use axum::extract::State;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
+use chrono::Utc;
 use quiver_storage::suggestions;
 
 use crate::error::{WebError, WebResult};
@@ -17,6 +19,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/suggestions", get(suggestions_page))
         .route("/api/suggestions/stream", get(suggestions_stream))
+        .route("/api/suggestions/:id/accept", post(accept_suggestion))
 }
 
 #[derive(Template)]
@@ -58,6 +61,43 @@ async fn suggestions_page(State(state): State<AppState>) -> WebResult<Response> 
         active: "suggestions",
         rows,
     })
+}
+
+#[derive(Template)]
+#[template(path = "suggestion_row.html")]
+struct SuggestionRowTpl {
+    row: SuggestionRowView,
+}
+
+async fn accept_suggestion(
+    Path(id): Path<i64>,
+    State(state): State<AppState>,
+) -> WebResult<Response> {
+    let row = tokio::task::spawn_blocking(move || -> WebResult<Option<SuggestionRowView>> {
+        let conn = state.pool.get()?;
+        suggestions::mark_accepted_by_id(&conn, id, Utc::now())?;
+        let fetched = suggestions::find_by_id(&conn, id)?;
+        Ok(fetched.map(|s| SuggestionRowView {
+            id: s.id,
+            session_id: s.session_id,
+            tool_id: s.tool_id,
+            task_text: s.task_text.unwrap_or_default(),
+            score_str: s
+                .score
+                .map(|sc| format!("{sc:.3}"))
+                .unwrap_or_else(|| "—".to_string()),
+            suggested_str: short_time(&s.suggested_at),
+            accepted: s.accepted,
+            accepted_str: s.accepted_at.as_deref().map(short_time).unwrap_or_default(),
+            oob: false,
+        }))
+    })
+    .await??;
+
+    match row {
+        Some(view) => render(SuggestionRowTpl { row: view }),
+        None => Ok((StatusCode::NOT_FOUND, "suggestion not found").into_response()),
+    }
 }
 
 fn short_time(rfc3339: &str) -> String {

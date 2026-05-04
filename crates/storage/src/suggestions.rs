@@ -70,6 +70,48 @@ pub fn mark_accepted(
     Ok(n)
 }
 
+/// Manually flip a single suggestion to `accepted=1`. Used by the web UI's
+/// Accept button to backfill rows that the live `mark_accepted` window
+/// missed (e.g. `quiver agent` was not running when the user invoked the
+/// suggested tool). Idempotent — returns `Ok(false)` if the row was already
+/// accepted or no row matches the id.
+pub fn mark_accepted_by_id(conn: &Connection, id: i64, accepted_at: DateTime<Utc>) -> Result<bool> {
+    let n = conn.execute(
+        "UPDATE agent_suggestions
+            SET accepted = 1, accepted_at = ?
+          WHERE id = ?
+            AND accepted = 0",
+        params![accepted_at.to_rfc3339(), id],
+    )?;
+    Ok(n > 0)
+}
+
+/// Fetch a single suggestion by id, or `None` if absent.
+pub fn find_by_id(conn: &Connection, id: i64) -> Result<Option<SuggestionRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, session_id, tool_id, task_text, score, suggested_at,
+                accepted, accepted_at
+         FROM agent_suggestions
+         WHERE id = ?",
+    )?;
+    let mut rows = stmt.query_map(params![id], |row| {
+        Ok(SuggestionRow {
+            id: row.get(0)?,
+            session_id: row.get(1)?,
+            tool_id: row.get(2)?,
+            task_text: row.get(3)?,
+            score: row.get(4)?,
+            suggested_at: row.get(5)?,
+            accepted: row.get::<_, i64>(6)? != 0,
+            accepted_at: row.get(7)?,
+        })
+    })?;
+    match rows.next() {
+        Some(r) => Ok(Some(r?)),
+        None => Ok(None),
+    }
+}
+
 /// `(suggested_count, accepted_count)` since `cutoff`.
 pub fn acceptance_stats(conn: &Connection, since: DateTime<Utc>) -> Result<(i64, i64)> {
     let cutoff = since.to_rfc3339();
@@ -195,6 +237,43 @@ mod tests {
         assert_eq!(mark_accepted(&conn, "s", "skill:x", ts, 60).unwrap(), 1);
         // Already accepted — second call is a no-op.
         assert_eq!(mark_accepted(&conn, "s", "skill:x", ts, 60).unwrap(), 0);
+    }
+
+    #[test]
+    fn mark_accepted_by_id_flips_pending_row() {
+        let (_d, conn) = tmp_conn();
+        seed_tool(&conn, "skill:caveman");
+        let suggested = Utc::now() - Duration::hours(3); // outside window
+        let id = record(&conn, "sess-1", "skill:caveman", None, None, suggested).unwrap();
+
+        // Window-based call would not flip it (too old).
+        assert_eq!(
+            mark_accepted(&conn, "sess-1", "skill:caveman", Utc::now(), 60).unwrap(),
+            0
+        );
+        // But manual by-id does.
+        assert!(mark_accepted_by_id(&conn, id, Utc::now()).unwrap());
+
+        let row = find_by_id(&conn, id).unwrap().unwrap();
+        assert!(row.accepted);
+        assert!(row.accepted_at.is_some());
+    }
+
+    #[test]
+    fn mark_accepted_by_id_is_idempotent() {
+        let (_d, conn) = tmp_conn();
+        seed_tool(&conn, "skill:x");
+        let id = record(&conn, "s", "skill:x", None, None, Utc::now()).unwrap();
+        assert!(mark_accepted_by_id(&conn, id, Utc::now()).unwrap());
+        // Second call: row already accepted — no-op, returns false.
+        assert!(!mark_accepted_by_id(&conn, id, Utc::now()).unwrap());
+    }
+
+    #[test]
+    fn mark_accepted_by_id_unknown_id_returns_false() {
+        let (_d, conn) = tmp_conn();
+        assert!(!mark_accepted_by_id(&conn, 9999, Utc::now()).unwrap());
+        assert!(find_by_id(&conn, 9999).unwrap().is_none());
     }
 
     #[test]

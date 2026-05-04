@@ -74,6 +74,21 @@ async fn get(state: AppState, uri: &str) -> (StatusCode, String) {
     body_string(resp).await
 }
 
+async fn post(state: AppState, uri: &str) -> (StatusCode, String) {
+    let app = routes::router(state);
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    body_string(resp).await
+}
+
 #[tokio::test]
 async fn root_redirects_to_catalog() {
     let (_d, state) = build_state(&[]);
@@ -205,6 +220,69 @@ async fn suggestions_page_includes_initial_rows() {
     assert!(body.contains("Suggestions"));
     assert!(body.contains("skill:caveman"));
     assert!(body.contains("compress this"));
+}
+
+#[tokio::test]
+async fn accept_suggestion_flips_pending_row() {
+    let (_d, state) = build_state(&[sample(
+        "skill:caveman",
+        "caveman",
+        ToolType::Skill,
+        "be terse",
+    )]);
+    let id = {
+        let conn = state.pool.get().unwrap();
+        suggestions::record(
+            &conn,
+            "sess-1",
+            "skill:caveman",
+            Some("compress this"),
+            Some(0.82),
+            Utc::now(),
+        )
+        .unwrap()
+    };
+    let (status, body) = post(state.clone(), &format!("/api/suggestions/{id}/accept")).await;
+    assert_eq!(status, StatusCode::OK);
+    // Returned fragment shows the accepted state + retains the tool id.
+    assert!(body.contains("skill:caveman"));
+    assert!(body.contains("accepted"));
+    assert!(!body.contains("Accept</button>"));
+    // DB confirms flip.
+    let row = {
+        let conn = state.pool.get().unwrap();
+        suggestions::find_by_id(&conn, id).unwrap().unwrap()
+    };
+    assert!(row.accepted);
+    assert!(row.accepted_at.is_some());
+}
+
+#[tokio::test]
+async fn accept_suggestion_404_for_unknown_id() {
+    let (_d, state) = build_state(&[]);
+    let (status, _body) = post(state, "/api/suggestions/9999/accept").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn accept_suggestion_idempotent_returns_accepted_fragment() {
+    let (_d, state) = build_state(&[sample(
+        "skill:caveman",
+        "caveman",
+        ToolType::Skill,
+        "be terse",
+    )]);
+    let id = {
+        let conn = state.pool.get().unwrap();
+        suggestions::record(&conn, "s", "skill:caveman", None, None, Utc::now()).unwrap()
+    };
+    // First accept: flips row.
+    let (s1, _) = post(state.clone(), &format!("/api/suggestions/{id}/accept")).await;
+    assert_eq!(s1, StatusCode::OK);
+    // Second accept: still 200, fragment shows accepted (no duplicate flip).
+    let (s2, body) = post(state.clone(), &format!("/api/suggestions/{id}/accept")).await;
+    assert_eq!(s2, StatusCode::OK);
+    assert!(body.contains("accepted"));
 }
 
 #[tokio::test]

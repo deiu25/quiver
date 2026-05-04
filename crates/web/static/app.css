@@ -169,3 +169,17 @@ code, pre {
 .dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--muted); }
 .dot.ok { background: var(--ok); }
 .dot.warn { background: var(--warn); }
+
+.btn-accept {
+  background: transparent;
+  color: var(--ok);
+  border: 1px solid var(--ok);
+  border-radius: 6px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.btn-accept:hover {
+  background: rgba(63, 185, 80, 0.12);
+  filter: none;
+}

@@ -257,7 +257,7 @@ cargo test --workspace                      # all tests (138+)
 cargo test -p quiver-mcp-server            # MCP handler tests
 cargo test -p quiver-web --test routes     # web route integration tests
 cargo test -p quiver-web --test sse        # live SSE end-to-end test
-cargo test -p quiver --bins                # TUI logic tests
+cargo test -p quiver-cli --bins             # TUI logic tests
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```

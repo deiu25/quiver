@@ -9,7 +9,7 @@ See the [workspace README](https://github.com/deiu25/quiver#readme) for install 
 ## Install
 
 ```bash
-cargo install quiver
+cargo install quiver-cli
 ```
 
 Or from a clone of the workspace:

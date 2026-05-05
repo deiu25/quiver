@@ -2675,7 +2675,30 @@ dependencies = [
 ]
 
 [[package]]
-name = "quiver"
+name = "quiver-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "chrono",
+ "notify",
+ "quiver-core",
+ "quiver-ingestion",
+ "quiver-recommender",
+ "quiver-storage",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "walkdir",
+]
+
+[[package]]
+name = "quiver-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2696,29 +2719,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "walkdir",
-]
-
-[[package]]
-name = "quiver-agent"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "chrono",
- "notify",
- "quiver-core",
- "quiver-ingestion",
- "quiver-recommender",
- "quiver-storage",
- "reqwest",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
  "walkdir",
 ]
 

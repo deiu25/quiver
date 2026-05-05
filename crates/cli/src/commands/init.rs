@@ -1,13 +1,16 @@
 //! `quiver init` — zero-config bootstrap.
 //!
-//! Wires Claude Code hooks into `~/.claude/settings.json`, runs an initial
-//! sync if the catalog is empty, and (optionally) writes a single primer
-//! SKILL.md to `~/.claude/skills/quiver-pilot/` so the model knows what the
-//! `<quiver-recommendation>` blocks mean.
+//! Wires Claude Code hooks into `~/.claude/settings.json`, the Quiver MCP
+//! server entry into `~/.claude.json`, runs an initial sync if the catalog
+//! is empty, writes a single primer SKILL.md, and spawns the daily-task
+//! `quiver agent` detached so `/suggestions` and the success-rate ranker
+//! get fed automatically.
 //!
-//! Idempotent: re-running detects existing entries (matched by `quiver hook`
-//! substring) and skips duplicates. Atomic: every write is preceded by a
-//! `<file>.quiver-init.bak` backup and uses temp-file + rename.
+//! Idempotent: re-running detects existing hook entries (matched by
+//! `quiver hook` substring), MCP entries (by `command`), and a live agent
+//! process (by PID file + `kill(0)` probe). Atomic: every settings write
+//! is preceded by a `<file>.quiver-init.bak` backup and uses temp-file +
+//! rename.
 
 use std::path::{Path, PathBuf};
 
@@ -20,6 +23,9 @@ use crate::db_path::default_db_path;
 const META_SKILL_BODY: &str = include_str!("../../assets/quiver-pilot/SKILL.md");
 const META_SKILL_DIR: &str = "skills/quiver-pilot";
 const META_SKILL_FILE: &str = "SKILL.md";
+const AGENT_CACHE_DIR: &str = ".cache/quiver";
+const AGENT_PID_FILE: &str = "agent.pid";
+const AGENT_LOG_FILE: &str = "agent.log";
 
 #[derive(Args, Debug, Clone)]
 pub struct InitArgs {
@@ -36,6 +42,17 @@ pub struct InitArgs {
     /// populated and you only want to wire the hooks.
     #[arg(long)]
     pub no_sync: bool,
+    /// Skip the Quiver MCP server entry merge into `~/.claude.json`.
+    /// Default: wire it (so `mcp__quiver__recommend` / `info` are
+    /// available mid-session for the model).
+    #[arg(long)]
+    pub no_mcp: bool,
+    /// Skip spawning the background `quiver agent` daemon. Default: spawn
+    /// it detached (PID at `~/.cache/quiver/agent.pid`, logs at
+    /// `~/.cache/quiver/agent.log`) so `/suggestions` populates and the
+    /// success-rate reranker learns from acceptances.
+    #[arg(long)]
+    pub no_start_agent: bool,
     /// Print the proposed changes and exit without writing anything.
     #[arg(long)]
     pub dry_run: bool,
@@ -62,9 +79,17 @@ pub async fn run(args: InitArgs) -> Result<()> {
     if !args.no_meta_skill {
         write_meta_skill(&plan)?;
     }
+    if !args.no_mcp {
+        apply_mcp(&plan)?;
+    }
+    let agent_status = if !args.no_start_agent {
+        start_agent(&plan)
+    } else {
+        AgentStatus::Skipped
+    };
 
     println!();
-    print_next_steps(&plan);
+    print_next_steps(&plan, &agent_status);
     Ok(())
 }
 
@@ -73,26 +98,39 @@ struct Plan {
     scope: Scope,
     settings_path: PathBuf,
     meta_skill_path: PathBuf,
+    claude_json_path: PathBuf,
+    project_path: PathBuf,
+    agent_pid_path: PathBuf,
+    agent_log_path: PathBuf,
     quiver_bin: String,
 }
 
 fn build_plan(args: &InitArgs) -> Result<Plan> {
     let home = std::env::var("HOME").context("HOME is unset")?;
     let home = PathBuf::from(home);
+    let project_path = std::env::current_dir()?;
     let settings_path = match args.scope {
         Scope::User => home.join(".claude/settings.json"),
-        Scope::Project => std::env::current_dir()?.join(".claude/settings.json"),
+        Scope::Project => project_path.join(".claude/settings.json"),
     };
     let meta_skill_path = home
         .join(".claude")
         .join(META_SKILL_DIR)
         .join(META_SKILL_FILE);
+    let claude_json_path = home.join(".claude.json");
+    let cache_dir = home.join(AGENT_CACHE_DIR);
+    let agent_pid_path = cache_dir.join(AGENT_PID_FILE);
+    let agent_log_path = cache_dir.join(AGENT_LOG_FILE);
     let quiver_bin = current_quiver_binary();
 
     Ok(Plan {
         scope: args.scope,
         settings_path,
         meta_skill_path,
+        claude_json_path,
+        project_path,
+        agent_pid_path,
+        agent_log_path,
         quiver_bin,
     })
 }
@@ -109,16 +147,49 @@ fn print_plan(plan: &Plan, dry: bool) {
     eprintln!("[{prefix}] scope: {:?}", plan.scope);
     eprintln!("[{prefix}] settings: {}", plan.settings_path.display());
     eprintln!("[{prefix}] meta-skill: {}", plan.meta_skill_path.display());
+    eprintln!(
+        "[{prefix}] claude.json: {}",
+        plan.claude_json_path.display()
+    );
+    eprintln!("[{prefix}] agent pid:   {}", plan.agent_pid_path.display());
+    eprintln!("[{prefix}] agent log:   {}", plan.agent_log_path.display());
     eprintln!("[{prefix}] quiver binary: {}", plan.quiver_bin);
 }
 
-fn print_next_steps(plan: &Plan) {
+fn print_next_steps(plan: &Plan, agent: &AgentStatus) {
     println!("✓ Quiver initialized.");
     println!();
     println!("Next:");
     println!("  1. Open a NEW Claude Code session (hooks load at session start).");
     println!("  2. Type any task — Quiver will inject a top-1 skill recommendation.");
     println!("  3. Disable per-shell with `export QUIVER_HOOK_DISABLED=1` if it gets noisy.");
+    println!();
+    match agent {
+        AgentStatus::Started(pid) => {
+            println!("Background agent: started (PID {pid}).");
+            println!("  Logs: {}", plan.agent_log_path.display());
+            println!("  Stop: kill {pid}");
+        },
+        AgentStatus::AlreadyRunning(pid) => {
+            println!("Background agent: already running (PID {pid}). Reusing.");
+            println!("  Logs: {}", plan.agent_log_path.display());
+        },
+        AgentStatus::Skipped => {
+            println!("Background agent: not started (--no-start-agent).");
+            println!("  Run manually: quiver agent");
+        },
+        AgentStatus::Failed(err) => {
+            println!("Background agent: failed to start ({err}).");
+            println!("  Run manually: quiver agent");
+        },
+    }
+    println!();
+    println!("Prefer tmux instead of the spawned daemon (survives reboot more cleanly):");
+    println!(
+        "  kill $(cat {}) 2>/dev/null",
+        plan.agent_pid_path.display()
+    );
+    println!("  tmux new -d -s quiver 'quiver agent'");
     println!();
     println!(
         "Settings backup: {}.quiver-init.bak",
@@ -264,6 +335,167 @@ fn upsert_hook_entry(
     arr.push(entry);
 }
 
+#[derive(Debug)]
+enum AgentStatus {
+    Started(u32),
+    AlreadyRunning(u32),
+    Skipped,
+    Failed(String),
+}
+
+fn apply_mcp(plan: &Plan) -> Result<()> {
+    let mut current = read_settings_json(&plan.claude_json_path)?;
+    backup_settings(&plan.claude_json_path)?;
+
+    let merged = merge_quiver_mcp(
+        current.clone(),
+        &plan.quiver_bin,
+        plan.scope,
+        &plan.project_path,
+    );
+    if merged == current {
+        eprintln!("[INIT] claude.json already has Quiver MCP entry — no change");
+        return Ok(());
+    }
+    current = merged;
+
+    write_settings_atomic(&plan.claude_json_path, &current)?;
+    eprintln!("[INIT] wrote {}", plan.claude_json_path.display());
+    Ok(())
+}
+
+/// Insert (or refresh) the Quiver MCP server entry. For `Scope::User` we
+/// write at top-level `mcpServers.quiver`; for `Scope::Project` under
+/// `projects.<cwd>.mcpServers.quiver`. Idempotent — same `command` is a
+/// no-op.
+pub(crate) fn merge_quiver_mcp(
+    mut settings: Value,
+    quiver_bin: &str,
+    scope: Scope,
+    project_path: &Path,
+) -> Value {
+    let entry = json!({
+        "type": "stdio",
+        "command": quiver_bin,
+        "args": ["mcp"],
+        "env": {},
+    });
+
+    let Some(root) = settings.as_object_mut() else {
+        return settings;
+    };
+    let target_obj: &mut serde_json::Map<String, Value> = match scope {
+        Scope::User => {
+            let mcp = root
+                .entry("mcpServers")
+                .or_insert_with(|| Value::Object(Default::default()));
+            let Some(obj) = mcp.as_object_mut() else {
+                return settings;
+            };
+            obj
+        },
+        Scope::Project => {
+            let projects = root
+                .entry("projects")
+                .or_insert_with(|| Value::Object(Default::default()));
+            let Some(projects_obj) = projects.as_object_mut() else {
+                return settings;
+            };
+            let key = project_path.display().to_string();
+            let project = projects_obj
+                .entry(key)
+                .or_insert_with(|| Value::Object(Default::default()));
+            let Some(project_obj) = project.as_object_mut() else {
+                return settings;
+            };
+            let mcp = project_obj
+                .entry("mcpServers")
+                .or_insert_with(|| Value::Object(Default::default()));
+            let Some(obj) = mcp.as_object_mut() else {
+                return settings;
+            };
+            obj
+        },
+    };
+
+    // Idempotent: if existing entry already points at the same command,
+    // leave it alone (preserves user's env/args customisations).
+    if let Some(existing) = target_obj.get("quiver")
+        && existing.get("command").and_then(|c| c.as_str()) == Some(quiver_bin)
+    {
+        return settings;
+    }
+    target_obj.insert("quiver".to_string(), entry);
+    settings
+}
+
+fn start_agent(plan: &Plan) -> AgentStatus {
+    if let Some(pid) = read_pid(&plan.agent_pid_path)
+        && agent_is_running(pid)
+    {
+        return AgentStatus::AlreadyRunning(pid);
+    }
+    match spawn_agent(plan) {
+        Ok(pid) => AgentStatus::Started(pid),
+        Err(err) => AgentStatus::Failed(format!("{err:#}")),
+    }
+}
+
+fn read_pid(path: &Path) -> Option<u32> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+}
+
+#[cfg(unix)]
+fn agent_is_running(pid: u32) -> bool {
+    use nix::sys::signal::kill;
+    use nix::unistd::Pid;
+    kill(Pid::from_raw(pid as i32), None).is_ok()
+}
+
+#[cfg(not(unix))]
+fn agent_is_running(_pid: u32) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn spawn_agent(plan: &Plan) -> Result<u32> {
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    if let Some(parent) = plan.agent_log_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("mkdir -p {}", parent.display()))?;
+    }
+
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&plan.agent_log_path)
+        .with_context(|| format!("open log {}", plan.agent_log_path.display()))?;
+    let log_dup = log.try_clone().with_context(|| "clone log fd for stderr")?;
+
+    let child = Command::new(&plan.quiver_bin)
+        .arg("agent")
+        .stdin(Stdio::null())
+        .stdout(log)
+        .stderr(log_dup)
+        .process_group(0)
+        .spawn()
+        .with_context(|| format!("spawn {} agent", plan.quiver_bin))?;
+
+    let pid = child.id();
+    std::fs::write(&plan.agent_pid_path, pid.to_string())
+        .with_context(|| format!("write pid file {}", plan.agent_pid_path.display()))?;
+    Ok(pid)
+}
+
+#[cfg(not(unix))]
+fn spawn_agent(_plan: &Plan) -> Result<u32> {
+    anyhow::bail!("agent autostart not supported on this platform — run `quiver agent` manually")
+}
+
 fn write_meta_skill(plan: &Plan) -> Result<()> {
     if plan.meta_skill_path.exists() {
         eprintln!(
@@ -376,12 +608,7 @@ mod tests {
     #[test]
     fn write_meta_skill_writes_file_when_absent() -> anyhow::Result<()> {
         let dir = tempfile::tempdir()?;
-        let plan = Plan {
-            scope: Scope::User,
-            settings_path: dir.path().join("settings.json"),
-            meta_skill_path: dir.path().join("skills/quiver-pilot/SKILL.md"),
-            quiver_bin: "quiver".into(),
-        };
+        let plan = test_plan(dir.path(), "skills/quiver-pilot/SKILL.md");
         write_meta_skill(&plan)?;
         let content = std::fs::read_to_string(&plan.meta_skill_path)?;
         assert!(content.contains("name: quiver-pilot"));
@@ -395,15 +622,23 @@ mod tests {
         let path = dir.path().join("skills/quiver-pilot/SKILL.md");
         std::fs::create_dir_all(path.parent().unwrap())?;
         std::fs::write(&path, "user-customised")?;
-        let plan = Plan {
-            scope: Scope::User,
-            settings_path: dir.path().join("settings.json"),
-            meta_skill_path: path.clone(),
-            quiver_bin: "quiver".into(),
-        };
+        let plan = test_plan(dir.path(), "skills/quiver-pilot/SKILL.md");
         write_meta_skill(&plan)?;
         assert_eq!(std::fs::read_to_string(&path)?, "user-customised");
         Ok(())
+    }
+
+    fn test_plan(root: &Path, meta_skill_subpath: &str) -> Plan {
+        Plan {
+            scope: Scope::User,
+            settings_path: root.join("settings.json"),
+            meta_skill_path: root.join(meta_skill_subpath),
+            claude_json_path: root.join("claude.json"),
+            project_path: root.to_path_buf(),
+            agent_pid_path: root.join("agent.pid"),
+            agent_log_path: root.join("agent.log"),
+            quiver_bin: "quiver".into(),
+        }
     }
 
     #[test]
@@ -422,5 +657,118 @@ mod tests {
         let content = std::fs::read_to_string(&target)?;
         assert!(content.contains("\"x\""));
         Ok(())
+    }
+
+    #[test]
+    fn merge_mcp_user_scope_writes_top_level_entry() {
+        let merged = merge_quiver_mcp(
+            json!({}),
+            "/usr/local/bin/quiver",
+            Scope::User,
+            Path::new("/anywhere"),
+        );
+        let entry = merged.pointer("/mcpServers/quiver").unwrap();
+        assert_eq!(entry.get("type").and_then(|v| v.as_str()), Some("stdio"));
+        assert_eq!(
+            entry.get("command").and_then(|v| v.as_str()),
+            Some("/usr/local/bin/quiver")
+        );
+        let args = entry.get("args").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(args.len(), 1);
+        assert_eq!(args[0].as_str(), Some("mcp"));
+    }
+
+    #[test]
+    fn merge_mcp_project_scope_nests_under_projects() {
+        let cwd = Path::new("/home/u/proj");
+        let merged = merge_quiver_mcp(json!({}), "/bin/quiver", Scope::Project, cwd);
+        let entry = merged
+            .pointer("/projects/~1home~1u~1proj/mcpServers/quiver")
+            .unwrap();
+        assert_eq!(
+            entry.get("command").and_then(|v| v.as_str()),
+            Some("/bin/quiver")
+        );
+    }
+
+    #[test]
+    fn merge_mcp_is_idempotent() {
+        let first = merge_quiver_mcp(json!({}), "/bin/quiver", Scope::User, Path::new("/x"));
+        let second = merge_quiver_mcp(first.clone(), "/bin/quiver", Scope::User, Path::new("/x"));
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn merge_mcp_preserves_other_projects() {
+        let starting = json!({
+            "projects": {
+                "/home/u/other": {
+                    "mcpServers": { "context7": { "type": "stdio", "command": "context7" } }
+                }
+            }
+        });
+        let merged = merge_quiver_mcp(
+            starting.clone(),
+            "/bin/quiver",
+            Scope::Project,
+            Path::new("/home/u/proj"),
+        );
+        assert!(
+            merged
+                .pointer("/projects/~1home~1u~1other/mcpServers/context7")
+                .is_some(),
+            "other project's MCP entry preserved"
+        );
+        assert!(
+            merged
+                .pointer("/projects/~1home~1u~1proj/mcpServers/quiver")
+                .is_some(),
+            "current project's quiver entry inserted"
+        );
+    }
+
+    #[test]
+    fn merge_mcp_replaces_existing_entry_with_different_command() {
+        let starting = json!({
+            "mcpServers": {
+                "quiver": { "type": "stdio", "command": "/old/path/quiver", "args": ["mcp"] }
+            }
+        });
+        let merged = merge_quiver_mcp(starting, "/new/path/quiver", Scope::User, Path::new("/x"));
+        let cmd = merged
+            .pointer("/mcpServers/quiver/command")
+            .and_then(|v| v.as_str())
+            .unwrap();
+        assert_eq!(cmd, "/new/path/quiver");
+    }
+
+    #[test]
+    fn agent_is_running_returns_true_for_self() {
+        // The current test process is alive.
+        let me = std::process::id();
+        assert!(agent_is_running(me));
+    }
+
+    #[test]
+    fn agent_is_running_returns_false_for_unallocated_pid() {
+        // PID 1 is init; PID 2_000_000 is almost certainly unused on Linux
+        // (default `pid_max` = 4_194_304 but reaching there in practice is
+        // rare). If this flakes, raise the cap.
+        assert!(!agent_is_running(2_000_000));
+    }
+
+    #[test]
+    fn read_pid_handles_missing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let none = read_pid(&dir.path().join("nope.pid"));
+        assert!(none.is_none());
+    }
+
+    #[test]
+    fn read_pid_parses_trailing_newline() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p.pid");
+        std::fs::write(&path, "12345\n").unwrap();
+        assert_eq!(read_pid(&path), Some(12345));
     }
 }

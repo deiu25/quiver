@@ -36,6 +36,9 @@ walkdir = { workspace = true }
 rusqlite = { workspace = true }
 chrono = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.30", features = ["signal"] }
+
 [dev-dependencies]
 chrono = { workspace = true }
 tempfile = { workspace = true }

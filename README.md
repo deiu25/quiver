@@ -5,6 +5,7 @@
 **Local tool registry, recommender, and background agent for Claude Code.**
 
 [![CI](https://github.com/deiu25/quiver/actions/workflows/ci.yml/badge.svg)](https://github.com/deiu25/quiver/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/quiver-cli.svg)](https://crates.io/crates/quiver-cli)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![Rust 2024](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org)
 [![Status](https://img.shields.io/badge/status-active-brightgreen.svg)](#roadmap)
@@ -57,16 +58,18 @@ $ quiver stats --top 3
 ## Install
 
 ```bash
+cargo install quiver-cli
+```
+
+The crate is `quiver-cli` (the bare `quiver` name is squatted on crates.io); the installed binary is `quiver`.
+
+Or build from a clone:
+
+```bash
 git clone https://github.com/deiu25/quiver.git
 cd quiver
 cargo build --release
 cp target/release/quiver ~/.local/bin/
-```
-
-Or install directly with cargo:
-
-```bash
-cargo install --path crates/cli
 ```
 
 **Requirements:** Rust stable (2024 edition). On first `sync`, Quiver downloads the BAAI/bge-small-en-v1.5 model (~30 MB) into `$XDG_CACHE_HOME/fastembed`.
@@ -269,7 +272,7 @@ cargo fmt --all -- --check
 - `quiver info <id>` is currently a stub.
 - `quiver agent` runs in the foreground — no daemon mode yet, wrap with `tmux` or `systemd`.
 - Linux + macOS only for now; Windows is untested (notify-rs supports it but no CI gate).
-- No prebuilt binaries yet — `cargo install --path crates/cli` from a clone is the supported install path until v0.1 lands on crates.io and GitHub Releases.
+- No static prebuilt binaries via GitHub Releases yet; `cargo install quiver-cli` (or build from a clone) is the supported install path.
 
 ---
 

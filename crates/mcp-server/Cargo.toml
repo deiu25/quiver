@@ -7,10 +7,10 @@ repository.workspace = true
 description = "rmcp stdio MCP server exposing quiver tools to Claude Code"
 
 [dependencies]
-quiver-core = { path = "../core", version = "0.1.2" }
-quiver-storage = { path = "../storage", version = "0.1.2" }
-quiver-recommender = { path = "../recommender", version = "0.1.2" }
-quiver-ingestion = { path = "../ingestion", version = "0.1.2" }
+quiver-core = { path = "../core", version = "0.1.3" }
+quiver-storage = { path = "../storage", version = "0.1.3" }
+quiver-recommender = { path = "../recommender", version = "0.1.3" }
+quiver-ingestion = { path = "../ingestion", version = "0.1.3" }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 rmcp = { workspace = true }

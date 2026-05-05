@@ -12,11 +12,11 @@ default = []
 debug-embed = ["rust-embed/debug-embed"]
 
 [dependencies]
-quiver-core = { path = "../core", version = "0.1.0" }
-quiver-storage = { path = "../storage", version = "0.1.0" }
-quiver-recommender = { path = "../recommender", version = "0.1.0" }
-quiver-agent = { path = "../agent", version = "0.1.0" }
-quiver-ingestion = { path = "../ingestion", version = "0.1.0" }
+quiver-core = { path = "../core", version = "0.1.1" }
+quiver-storage = { path = "../storage", version = "0.1.1" }
+quiver-recommender = { path = "../recommender", version = "0.1.1" }
+quiver-agent = { path = "../agent", version = "0.1.1" }
+quiver-ingestion = { path = "../ingestion", version = "0.1.1" }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }

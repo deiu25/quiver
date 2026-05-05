@@ -7,8 +7,8 @@ repository.workspace = true
 description = "Hybrid FTS + sqlite-vec cosine recommender with success-rate reranker for quiver"
 
 [dependencies]
-quiver-core    = { path = "../core", version = "0.1.0" }
-quiver-storage = { path = "../storage", version = "0.1.0" }
+quiver-core    = { path = "../core", version = "0.1.1" }
+quiver-storage = { path = "../storage", version = "0.1.1" }
 anyhow          = { workspace = true }
 fastembed       = { workspace = true }
 rusqlite        = { workspace = true }

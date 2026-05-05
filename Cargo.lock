@@ -2676,7 +2676,7 @@ dependencies = [
 
 [[package]]
 name = "quiver-agent"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2699,7 +2699,7 @@ dependencies = [
 
 [[package]]
 name = "quiver-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2724,7 +2724,7 @@ dependencies = [
 
 [[package]]
 name = "quiver-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2735,7 +2735,7 @@ dependencies = [
 
 [[package]]
 name = "quiver-ingestion"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2757,7 +2757,7 @@ dependencies = [
 
 [[package]]
 name = "quiver-mcp-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2777,7 +2777,7 @@ dependencies = [
 
 [[package]]
 name = "quiver-recommender"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "fastembed",
@@ -2788,7 +2788,7 @@ dependencies = [
 
 [[package]]
 name = "quiver-storage"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2805,7 +2805,7 @@ dependencies = [
 
 [[package]]
 name = "quiver-web"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "askama",

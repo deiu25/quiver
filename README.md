@@ -74,6 +74,18 @@ cp target/release/quiver ~/.local/bin/
 
 **Requirements:** Rust stable (2024 edition). On first `sync`, Quiver downloads the BAAI/bge-small-en-v1.5 model (~30 MB) into `$XDG_CACHE_HOME/fastembed`.
 
+### Update
+
+To grab the latest published version from crates.io, run:
+
+```bash
+cargo install quiver-cli --force
+```
+
+`--force` overwrites the previously installed `quiver` binary in `~/.cargo/bin/`. Cargo downloads the new release, recompiles, and replaces it in place — no manual cleanup needed. Run `quiver --version` after to confirm the upgrade.
+
+If you built from a clone, `git pull && cargo install --path crates/cli --force` does the same thing locally.
+
 ---
 
 ## Quick start

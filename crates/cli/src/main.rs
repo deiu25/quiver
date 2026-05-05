@@ -8,6 +8,7 @@ mod commands {
     pub mod agent;
     pub mod dead_weight;
     pub mod digest;
+    pub mod hook;
     pub mod list;
     pub mod mcp;
     pub mod recommend;
@@ -124,6 +125,13 @@ enum Cmd {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Claude Code hook handler. Reads a hook event JSON from stdin and emits
+    /// `additionalContext` JSON on stdout. Wired by `quiver init` into
+    /// `~/.claude/settings.json`. Always exits 0 (never blocks tool execution).
+    Hook {
+        #[command(subcommand)]
+        event: commands::hook::HookEvent,
+    },
     /// Serve the local web UI on 127.0.0.1 (Ctrl-C to stop).
     /// Read-only against the same SQLite DB the CLI uses.
     Serve {
@@ -172,6 +180,7 @@ async fn main() -> anyhow::Result<()> {
             classify,
         } => commands::agent::run_cmd(sessions_dir, hints_dir, classify).await,
         Cmd::Digest { days, out } => commands::digest::run_cmd(days, out).await,
+        Cmd::Hook { event } => commands::hook::run(event).await,
         Cmd::Serve { port, host, open } => commands::serve::run(host, port, open).await,
     }
 }

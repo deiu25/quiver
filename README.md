@@ -91,7 +91,14 @@ If you built from a clone, `git pull && cargo install --path crates/cli --force`
 ## Quick start
 
 ```bash
-quiver sync                                              # scan + index every tool
+cargo install quiver-cli                                 # install
+quiver sync                                              # populate catalog from your install
+quiver init                                              # wire Claude Code hooks (one time)
+```
+
+After `quiver init`, every prompt you type into Claude Code is enriched with a top-1 skill recommendation (body excerpt included) via the `UserPromptSubmit` hook. The model sees the skill as inline context and follows it — no need to install or invoke anything by hand.
+
+```bash
 quiver recommend "extract design tokens"                 # top-3 hybrid search
 quiver tui                                               # browse interactively
 quiver serve --open                                      # local web UI on 127.0.0.1:7777
@@ -103,7 +110,9 @@ quiver agent                                             # background hint write
 
 ## Claude Code integration
 
-Append to `~/.claude/mcp_servers.json`:
+`quiver init` writes both the MCP server entry and the prompt-submit hooks into `~/.claude/settings.json` for you. Re-run anytime — it's idempotent and backs up the previous file to `settings.json.json.quiver-init.bak` first.
+
+If you'd rather wire MCP by hand (without the hooks), append to `~/.claude/mcp_servers.json`:
 
 ```json
 { "mcpServers": { "quiver": { "command": "quiver", "args": ["mcp"] } } }
@@ -178,6 +187,16 @@ Outcome heuristic per `tool_use` event: `success` (clean `tool_result`), `failur
 | Command | Purpose |
 |---|---|
 | `quiver mcp` | Run the stdio MCP server. JSON-RPC on stdin/stdout, logs on stderr. Built on `rmcp` 1.6 with `tool_router` macros. |
+
+### Claude Code hooks
+
+| Command | Purpose |
+|---|---|
+| `quiver init [--scope user\|project] [--no-meta-skill] [--no-sync] [--dry-run]` | Bootstrap. Syncs the catalog if empty, idempotently merges `UserPromptSubmit` + `PreToolUse` hook entries into `settings.json` (backup at `<file>.json.quiver-init.bak`), and writes a single primer SKILL.md (`~/.claude/skills/quiver-pilot/SKILL.md`) so the model knows what to do with `<quiver-recommendation>` blocks. |
+| `quiver hook user-prompt-submit` | Reads a Claude Code `UserPromptSubmit` event from stdin, runs the recommender, and emits `additionalContext` containing the top-1 skill **body excerpt** when score ≥ `QUIVER_HOOK_SCORE_MIN` (default 0.4). Wired by `init`; rarely invoked by hand. |
+| `quiver hook pre-tool-use` | Same shape but for `Skill` / `Agent` / `Task` tool calls — emits the top-3 metadata (no body) so the model can pivot if it picked something Quiver thinks is a worse match. Replaces the legacy bash wrapper. |
+
+Per-shell override: `export QUIVER_HOOK_DISABLED=1` short-circuits both hooks. Tune behaviour with `QUIVER_HOOK_SCORE_MIN` (float, e.g. `0.5`) and `QUIVER_HOOK_BODY_CHARS` (integer, default `3000`).
 
 ### Local web UI
 

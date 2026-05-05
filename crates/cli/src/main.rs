@@ -9,6 +9,7 @@ mod commands {
     pub mod dead_weight;
     pub mod digest;
     pub mod hook;
+    pub mod init;
     pub mod list;
     pub mod mcp;
     pub mod recommend;
@@ -125,6 +126,10 @@ enum Cmd {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Bootstrap Quiver: sync DB if empty, wire Claude Code hooks into
+    /// settings.json, and (optionally) install a primer SKILL.md so the
+    /// model knows how to act on `<quiver-recommendation>` blocks.
+    Init(commands::init::InitArgs),
     /// Claude Code hook handler. Reads a hook event JSON from stdin and emits
     /// `additionalContext` JSON on stdout. Wired by `quiver init` into
     /// `~/.claude/settings.json`. Always exits 0 (never blocks tool execution).
@@ -180,6 +185,7 @@ async fn main() -> anyhow::Result<()> {
             classify,
         } => commands::agent::run_cmd(sessions_dir, hints_dir, classify).await,
         Cmd::Digest { days, out } => commands::digest::run_cmd(days, out).await,
+        Cmd::Init(args) => commands::init::run(args).await,
         Cmd::Hook { event } => commands::hook::run(event).await,
         Cmd::Serve { port, host, open } => commands::serve::run(host, port, open).await,
     }

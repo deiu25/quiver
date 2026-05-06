@@ -292,3 +292,84 @@ async fn static_asset_serves_css() {
     assert_eq!(status, StatusCode::OK);
     assert!(body.contains("--bg") || body.contains("body"));
 }
+
+#[tokio::test]
+async fn catalog_renders_type_chips_with_counts() {
+    let (_d, state) = build_state(&[
+        sample("skill:a", "a", ToolType::Skill, "x"),
+        sample("skill:b", "b", ToolType::Skill, "x"),
+        sample("plugin:c", "c", ToolType::Plugin, "x"),
+        sample("mcp:d", "d", ToolType::Mcp, "x"),
+    ]);
+    let (status, body) = get(state, "/catalog").await;
+    assert_eq!(status, StatusCode::OK);
+    // Chip nav present with all five type labels + an All chip.
+    assert!(body.contains("class=\"chips\""));
+    assert!(body.contains("Skills"));
+    assert!(body.contains("Plugins"));
+    assert!(body.contains("MCP"));
+    assert!(body.contains("CLI"));
+    assert!(body.contains("Doc"));
+    // Counts reflect the seeded mix: 4 total, 2 skills, 1 plugin, 1 mcp.
+    assert!(body.contains("All <span class=\"muted\">(4)"));
+    assert!(body.contains("Skills <span class=\"muted\">(2)"));
+    assert!(body.contains("Plugins <span class=\"muted\">(1)"));
+    assert!(body.contains("MCP <span class=\"muted\">(1)"));
+    assert!(body.contains("CLI <span class=\"muted\">(0)"));
+}
+
+#[tokio::test]
+async fn catalog_marks_active_chip_via_type_filter() {
+    let (_d, state) = build_state(&[
+        sample("skill:a", "a", ToolType::Skill, "x"),
+        sample("plugin:b", "b", ToolType::Plugin, "x"),
+    ]);
+    let (status, body) = get(state, "/catalog?type=skill").await;
+    assert_eq!(status, StatusCode::OK);
+    // The skill chip should carry the `active` class; substring match
+    // tolerates whitespace variations Askama may emit between attributes.
+    assert!(body.contains("class=\"chip active\""));
+    // Active chip label "Skills" is present near the active marker; just
+    // verify both literals appear in the same response.
+    assert!(body.contains("Skills"));
+    // Filtered list excludes the plugin row.
+    assert!(body.contains("skill:a"));
+    assert!(!body.contains("plugin:b"));
+}
+
+#[tokio::test]
+async fn catalog_list_fragment_shows_type_aware_empty_state() {
+    let (_d, state) = build_state(&[]);
+    let (status, body) = get(state, "/catalog/list?type=mcp").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("No MCP servers cataloged"));
+    assert!(body.contains("quiver sync"));
+}
+
+#[tokio::test]
+async fn catalog_list_fragment_shows_generic_empty_state() {
+    let (_d, state) = build_state(&[]);
+    let (status, body) = get(state, "/catalog/list").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("No tools cataloged yet"));
+}
+
+#[test]
+fn count_by_type_buckets_each_variant() {
+    use quiver_web::routes::catalog::count_by_type;
+    let metas = vec![
+        sample("skill:a", "a", ToolType::Skill, ""),
+        sample("skill:b", "b", ToolType::Skill, ""),
+        sample("plugin:c", "c", ToolType::Plugin, ""),
+        sample("mcp:d", "d", ToolType::Mcp, ""),
+        sample("cli:e", "e", ToolType::Cli, ""),
+        sample("doc:f", "f", ToolType::Doc, ""),
+    ];
+    let c = count_by_type(&metas);
+    assert_eq!(c.total, 6);
+    assert_eq!(c.skill, 2);
+    assert_eq!(c.plugin, 1);
+    assert_eq!(c.mcp, 1);
+    assert_eq!(c.cli, 1);
+    assert_eq!(c.doc, 1);
+}

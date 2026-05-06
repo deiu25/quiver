@@ -6,7 +6,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
-use quiver_core::tool::ToolType;
+use quiver_core::tool::{ToolMeta, ToolType};
 use quiver_storage::{scores, tools};
 use serde::Deserialize;
 
@@ -37,12 +37,82 @@ struct CatalogPage {
     type_filter: String,
     tools: Vec<ToolView>,
     total: usize,
+    chips: Vec<ChipView>,
 }
 
 #[derive(Template)]
 #[template(path = "catalog_list.html")]
 struct CatalogListFragment {
     tools: Vec<ToolView>,
+    type_filter: String,
+}
+
+pub struct ChipView {
+    pub value: &'static str,
+    pub label: &'static str,
+    pub count: usize,
+}
+
+#[derive(Default, Debug, PartialEq, Eq)]
+pub struct TypeCounts {
+    pub total: usize,
+    pub skill: usize,
+    pub plugin: usize,
+    pub mcp: usize,
+    pub cli: usize,
+    pub doc: usize,
+}
+
+pub fn count_by_type(metas: &[ToolMeta]) -> TypeCounts {
+    let mut c = TypeCounts {
+        total: metas.len(),
+        ..TypeCounts::default()
+    };
+    for m in metas {
+        match m.r#type {
+            ToolType::Skill => c.skill += 1,
+            ToolType::Plugin => c.plugin += 1,
+            ToolType::Mcp => c.mcp += 1,
+            ToolType::Cli => c.cli += 1,
+            ToolType::Doc => c.doc += 1,
+        }
+    }
+    c
+}
+
+fn build_chips(c: &TypeCounts) -> Vec<ChipView> {
+    vec![
+        ChipView {
+            value: "",
+            label: "All",
+            count: c.total,
+        },
+        ChipView {
+            value: "skill",
+            label: "Skills",
+            count: c.skill,
+        },
+        ChipView {
+            value: "plugin",
+            label: "Plugins",
+            count: c.plugin,
+        },
+        ChipView {
+            value: "mcp",
+            label: "MCP",
+            count: c.mcp,
+        },
+        ChipView {
+            value: "cli",
+            label: "CLI",
+            count: c.cli,
+        },
+        ChipView {
+            value: "doc",
+            label: "Doc",
+            count: c.doc,
+        },
+    ]
 }
 
 #[derive(Template)]
@@ -60,18 +130,21 @@ async fn catalog_page(
     let filter = parse_type_filter(&q.type_filter);
     let needle = q.q.trim().to_string();
     let needle_filter = needle.clone();
-    let tools = tokio::task::spawn_blocking(move || -> WebResult<Vec<ToolView>> {
-        let conn = state.pool.get()?;
-        Ok(load_tools(&conn, filter, &needle_filter)?)
-    })
-    .await??;
+    let (tools, counts) =
+        tokio::task::spawn_blocking(move || -> WebResult<(Vec<ToolView>, TypeCounts)> {
+            let conn = state.pool.get()?;
+            Ok(load_tools(&conn, filter, &needle_filter)?)
+        })
+        .await??;
 
+    let chips = build_chips(&counts);
     let page = CatalogPage {
         active: "catalog",
         total: tools.len(),
         q: needle,
         type_filter: q.type_filter,
         tools,
+        chips,
     };
     render(page)
 }
@@ -82,13 +155,15 @@ async fn catalog_list_fragment(
 ) -> WebResult<Response> {
     let filter = parse_type_filter(&q.type_filter);
     let needle = q.q.trim().to_string();
-    let tools = tokio::task::spawn_blocking(move || -> WebResult<Vec<ToolView>> {
-        let conn = state.pool.get()?;
-        Ok(load_tools(&conn, filter, &needle)?)
-    })
-    .await??;
+    let type_filter = q.type_filter.clone();
+    let (tools, _counts) =
+        tokio::task::spawn_blocking(move || -> WebResult<(Vec<ToolView>, TypeCounts)> {
+            let conn = state.pool.get()?;
+            Ok(load_tools(&conn, filter, &needle)?)
+        })
+        .await??;
 
-    render(CatalogListFragment { tools })
+    render(CatalogListFragment { tools, type_filter })
 }
 
 async fn tool_detail(State(state): State<AppState>, Path(id): Path<String>) -> WebResult<Response> {
@@ -120,8 +195,11 @@ fn load_tools(
     conn: &rusqlite::Connection,
     type_filter: Option<ToolType>,
     needle: &str,
-) -> anyhow::Result<Vec<ToolView>> {
+) -> anyhow::Result<(Vec<ToolView>, TypeCounts)> {
     let all = tools::list_all(conn)?;
+    // Counts span the *whole* catalog regardless of the active type filter so
+    // chip badges stay stable as the user clicks through them.
+    let counts = count_by_type(&all);
     let needle_lower = needle.to_ascii_lowercase();
     let mut out: Vec<ToolView> = all
         .into_iter()
@@ -141,7 +219,7 @@ fn load_tools(
         .collect();
     // Stable sort: name, then id, so the htmx fragment stays predictable.
     out.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
-    Ok(out)
+    Ok((out, counts))
 }
 
 fn text_haystack(t: &quiver_core::tool::ToolMeta) -> String {

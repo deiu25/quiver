@@ -3,22 +3,29 @@
 {% block content %}
 <h1>Catalog <span class="muted">({{ total }})</span></h1>
 
-<form class="row" style="margin-bottom:1rem"
+<form class="row" style="margin-bottom:0.75rem"
       hx-get="/catalog/list"
-      hx-trigger="keyup changed delay:200ms from:input, change from:select"
+      hx-trigger="keyup changed delay:200ms from:input"
       hx-target="#catalog-list"
       hx-include="this">
   <input type="search" name="q" placeholder="Search name, description, triggers…"
          value="{{ q }}" autocomplete="off" style="flex:1" />
-  <select name="type">
-    <option value="" {% if type_filter == "" %}selected{% endif %}>All types</option>
-    <option value="skill" {% if type_filter == "skill" %}selected{% endif %}>Skill</option>
-    <option value="plugin" {% if type_filter == "plugin" %}selected{% endif %}>Plugin</option>
-    <option value="mcp" {% if type_filter == "mcp" %}selected{% endif %}>MCP</option>
-    <option value="cli" {% if type_filter == "cli" %}selected{% endif %}>CLI</option>
-    <option value="doc" {% if type_filter == "doc" %}selected{% endif %}>Doc</option>
-  </select>
+  <input type="hidden" name="type" value="{{ type_filter }}" />
 </form>
+
+<nav class="chips" role="tablist" aria-label="Filter by type">
+  {% for chip in chips %}
+    <a href="/catalog?q={{ q }}&type={{ chip.value }}"
+       class="chip{% if type_filter == chip.value %} active{% endif %}"
+       role="tab"
+       aria-selected="{% if type_filter == chip.value %}true{% else %}false{% endif %}"
+       hx-get="/catalog/list?q={{ q }}&type={{ chip.value }}"
+       hx-target="#catalog-list"
+       hx-push-url="/catalog?q={{ q }}&type={{ chip.value }}">
+      {{ chip.label }} <span class="muted">({{ chip.count }})</span>
+    </a>
+  {% endfor %}
+</nav>
 
 <div id="catalog-list">
   {% include "catalog_list.html" %}

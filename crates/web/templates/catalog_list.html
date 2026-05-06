@@ -1,5 +1,17 @@
 {% if tools.is_empty() %}
-  <p class="muted">No tools match.</p>
+  {% if type_filter == "skill" %}
+    <p class="muted">No skills cataloged. Make sure <code>~/.claude/skills/**/SKILL.md</code> exists, then run <code>quiver sync</code>.</p>
+  {% else if type_filter == "plugin" %}
+    <p class="muted">No plugins cataloged. Make sure <code>~/.claude/plugins/installed_plugins.json</code> exists, then run <code>quiver sync</code>.</p>
+  {% else if type_filter == "mcp" %}
+    <p class="muted">No MCP servers cataloged. Make sure <code>~/.claude/mcp_servers.json</code> exists, then run <code>quiver sync</code>.</p>
+  {% else if type_filter == "cli" %}
+    <p class="muted">No CLI tools cataloged.</p>
+  {% else if type_filter == "doc" %}
+    <p class="muted">No docs cataloged.</p>
+  {% else %}
+    <p class="muted">No tools cataloged yet. Run <code>quiver sync</code> to ingest <code>~/.claude</code>, or add a GitHub repo from <a href="/sources">/sources</a>.</p>
+  {% endif %}
 {% else %}
   <table>
     <thead>

@@ -96,9 +96,9 @@ quiver init                                              # wire everything (one 
 # restart Claude Code
 ```
 
-`quiver init` does it all in one step: syncs the catalog if empty, wires the `UserPromptSubmit` + `PreToolUse` hooks into `~/.claude/settings.json`, registers the Quiver MCP server in `~/.claude.json`, writes the `quiver-pilot` primer SKILL.md, and spawns `quiver agent` detached (PID at `~/.cache/quiver/agent.pid`, logs at `~/.cache/quiver/agent.log`). After the next Claude Code session starts, every prompt is enriched with a top-1 skill recommendation (body excerpt included) — the model sees the skill as inline context and follows it. No invocation, no install, no setup.
+`quiver init` does it all in one step: syncs the catalog if empty, wires the `UserPromptSubmit` + `PreToolUse` hooks into `~/.claude/settings.json`, registers the Quiver MCP server in `~/.claude.json`, writes the `quiver-pilot` primer SKILL.md, spawns `quiver agent` detached (PID at `~/.cache/quiver/agent.pid`, logs at `~/.cache/quiver/agent.log`), and spawns `quiver serve` on `http://127.0.0.1:7777` (PID at `~/.cache/quiver/web.pid`, logs at `~/.cache/quiver/web.log`). After the next Claude Code session starts, every prompt is enriched with a top-1 skill recommendation (body excerpt included) — the model sees the skill as inline context and follows it. The web UI gives you `/catalog`, `/recommend`, `/suggestions`, and `/stats` in the browser. No invocation, no install, no setup.
 
-Opt out of any step: `quiver init --no-sync --no-meta-skill --no-mcp --no-start-agent`. Each step is idempotent — re-run `quiver init` any time without duplicating entries.
+Opt out of any step: `quiver init --no-sync --no-meta-skill --no-mcp --no-start-agent --no-start-web`. Override the web port with `--web-port 8080`. Each step is idempotent — re-run `quiver init` any time without duplicating entries.
 
 ```bash
 quiver recommend "extract design tokens"                 # top-3 hybrid search
@@ -194,7 +194,7 @@ Outcome heuristic per `tool_use` event: `success` (clean `tool_result`), `failur
 
 | Command | Purpose |
 |---|---|
-| `quiver init [--scope user\|project] [--no-meta-skill] [--no-sync] [--no-mcp] [--no-start-agent] [--dry-run]` | Single-command bootstrap. Syncs the catalog if empty, merges hook entries into `~/.claude/settings.json`, registers the MCP server in `~/.claude.json` (top-level for `--scope user`, per-project for `--scope project`), writes the primer SKILL.md, and spawns `quiver agent` detached (PID at `~/.cache/quiver/agent.pid`, log at `~/.cache/quiver/agent.log`). Each step idempotent — agent reuse detected via `kill(0)` on PID file. Backup at `<file>.json.quiver-init.bak`. |
+| `quiver init [--scope user\|project] [--no-meta-skill] [--no-sync] [--no-mcp] [--no-start-agent] [--no-start-web] [--web-port N] [--dry-run]` | Single-command bootstrap. Syncs the catalog if empty, merges hook entries into `~/.claude/settings.json`, registers the MCP server in `~/.claude.json` (top-level for `--scope user`, per-project for `--scope project`), writes the primer SKILL.md, and spawns both `quiver agent` (PID at `~/.cache/quiver/agent.pid`) and `quiver serve` (PID at `~/.cache/quiver/web.pid`, default port 7777) detached. Each step idempotent — agent + web reuse detected via `kill(0)` on PID file. Backup at `<file>.json.quiver-init.bak`. |
 | `quiver hook user-prompt-submit` | Reads a Claude Code `UserPromptSubmit` event from stdin, runs the recommender, and emits `additionalContext` containing the top-1 skill **body excerpt** when score ≥ `QUIVER_HOOK_SCORE_MIN` (default 0.4). Wired by `init`; rarely invoked by hand. |
 | `quiver hook pre-tool-use` | Same shape but for `Skill` / `Agent` / `Task` tool calls — emits the top-3 metadata (no body) so the model can pivot if it picked something Quiver thinks is a worse match. Replaces the legacy bash wrapper. |
 

@@ -26,6 +26,9 @@ const META_SKILL_FILE: &str = "SKILL.md";
 const AGENT_CACHE_DIR: &str = ".cache/quiver";
 const AGENT_PID_FILE: &str = "agent.pid";
 const AGENT_LOG_FILE: &str = "agent.log";
+const WEB_PID_FILE: &str = "web.pid";
+const WEB_LOG_FILE: &str = "web.log";
+const DEFAULT_WEB_PORT: u16 = 7777;
 
 #[derive(Args, Debug, Clone)]
 pub struct InitArgs {
@@ -53,6 +56,15 @@ pub struct InitArgs {
     /// success-rate reranker learns from acceptances.
     #[arg(long)]
     pub no_start_agent: bool,
+    /// Skip spawning the local web UI on 127.0.0.1. Default: spawn
+    /// `quiver serve` detached (PID at `~/.cache/quiver/web.pid`, logs
+    /// at `~/.cache/quiver/web.log`) so `/catalog`, `/recommend`, and
+    /// `/suggestions` are reachable in the browser.
+    #[arg(long)]
+    pub no_start_web: bool,
+    /// Port to bind the web UI on (default 7777). Loopback only.
+    #[arg(long, default_value_t = DEFAULT_WEB_PORT)]
+    pub web_port: u16,
     /// Print the proposed changes and exit without writing anything.
     #[arg(long)]
     pub dry_run: bool,
@@ -87,9 +99,14 @@ pub async fn run(args: InitArgs) -> Result<()> {
     } else {
         AgentStatus::Skipped
     };
+    let web_status = if !args.no_start_web {
+        start_web(&plan)
+    } else {
+        WebStatus::Skipped
+    };
 
     println!();
-    print_next_steps(&plan, &agent_status);
+    print_next_steps(&plan, &agent_status, &web_status);
     Ok(())
 }
 
@@ -102,6 +119,9 @@ struct Plan {
     project_path: PathBuf,
     agent_pid_path: PathBuf,
     agent_log_path: PathBuf,
+    web_pid_path: PathBuf,
+    web_log_path: PathBuf,
+    web_port: u16,
     quiver_bin: String,
 }
 
@@ -121,6 +141,8 @@ fn build_plan(args: &InitArgs) -> Result<Plan> {
     let cache_dir = home.join(AGENT_CACHE_DIR);
     let agent_pid_path = cache_dir.join(AGENT_PID_FILE);
     let agent_log_path = cache_dir.join(AGENT_LOG_FILE);
+    let web_pid_path = cache_dir.join(WEB_PID_FILE);
+    let web_log_path = cache_dir.join(WEB_LOG_FILE);
     let quiver_bin = current_quiver_binary();
 
     Ok(Plan {
@@ -131,6 +153,9 @@ fn build_plan(args: &InitArgs) -> Result<Plan> {
         project_path,
         agent_pid_path,
         agent_log_path,
+        web_pid_path,
+        web_log_path,
+        web_port: args.web_port,
         quiver_bin,
     })
 }
@@ -153,10 +178,16 @@ fn print_plan(plan: &Plan, dry: bool) {
     );
     eprintln!("[{prefix}] agent pid:   {}", plan.agent_pid_path.display());
     eprintln!("[{prefix}] agent log:   {}", plan.agent_log_path.display());
+    eprintln!(
+        "[{prefix}] web pid:     {} (port {})",
+        plan.web_pid_path.display(),
+        plan.web_port
+    );
+    eprintln!("[{prefix}] web log:     {}", plan.web_log_path.display());
     eprintln!("[{prefix}] quiver binary: {}", plan.quiver_bin);
 }
 
-fn print_next_steps(plan: &Plan, agent: &AgentStatus) {
+fn print_next_steps(plan: &Plan, agent: &AgentStatus, web: &WebStatus) {
     println!("✓ Quiver initialized.");
     println!();
     println!("Next:");
@@ -183,13 +214,48 @@ fn print_next_steps(plan: &Plan, agent: &AgentStatus) {
             println!("  Run manually: quiver agent");
         },
     }
+    match web {
+        WebStatus::Started(pid) => {
+            println!(
+                "Web UI:           started (PID {pid}) at http://127.0.0.1:{}.",
+                plan.web_port
+            );
+            println!("  Logs: {}", plan.web_log_path.display());
+            println!("  Stop: kill {pid}");
+        },
+        WebStatus::AlreadyRunning(pid) => {
+            println!(
+                "Web UI:           already running (PID {pid}) at http://127.0.0.1:{}. Reusing.",
+                plan.web_port
+            );
+        },
+        WebStatus::Skipped => {
+            println!("Web UI:           not started (--no-start-web).");
+            println!(
+                "  Run manually: quiver serve --port {} --open",
+                plan.web_port
+            );
+        },
+        WebStatus::Failed(err) => {
+            println!("Web UI:           failed to start ({err}).");
+            println!(
+                "  Run manually: quiver serve --port {} --open",
+                plan.web_port
+            );
+        },
+    }
     println!();
-    println!("Prefer tmux instead of the spawned daemon (survives reboot more cleanly):");
+    println!("Prefer tmux instead of the spawned daemons (survives reboot more cleanly):");
     println!(
         "  kill $(cat {}) 2>/dev/null",
         plan.agent_pid_path.display()
     );
-    println!("  tmux new -d -s quiver 'quiver agent'");
+    println!("  kill $(cat {}) 2>/dev/null", plan.web_pid_path.display());
+    println!("  tmux new -d -s quiver-agent 'quiver agent'");
+    println!(
+        "  tmux new -d -s quiver-web 'quiver serve --port {}'",
+        plan.web_port
+    );
     println!();
     println!(
         "Settings backup: {}.quiver-init.bak",
@@ -343,6 +409,14 @@ enum AgentStatus {
     Failed(String),
 }
 
+#[derive(Debug)]
+enum WebStatus {
+    Started(u32),
+    AlreadyRunning(u32),
+    Skipped,
+    Failed(String),
+}
+
 fn apply_mcp(plan: &Plan) -> Result<()> {
     let mut current = read_settings_json(&plan.claude_json_path)?;
     backup_settings(&plan.claude_json_path)?;
@@ -441,6 +515,18 @@ fn start_agent(plan: &Plan) -> AgentStatus {
     }
 }
 
+fn start_web(plan: &Plan) -> WebStatus {
+    if let Some(pid) = read_pid(&plan.web_pid_path)
+        && agent_is_running(pid)
+    {
+        return WebStatus::AlreadyRunning(pid);
+    }
+    match spawn_web(plan) {
+        Ok(pid) => WebStatus::Started(pid),
+        Err(err) => WebStatus::Failed(format!("{err:#}")),
+    }
+}
+
 fn read_pid(path: &Path) -> Option<u32> {
     std::fs::read_to_string(path)
         .ok()
@@ -494,6 +580,45 @@ fn spawn_agent(plan: &Plan) -> Result<u32> {
 #[cfg(not(unix))]
 fn spawn_agent(_plan: &Plan) -> Result<u32> {
     anyhow::bail!("agent autostart not supported on this platform — run `quiver agent` manually")
+}
+
+#[cfg(unix)]
+fn spawn_web(plan: &Plan) -> Result<u32> {
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    if let Some(parent) = plan.web_log_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("mkdir -p {}", parent.display()))?;
+    }
+
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&plan.web_log_path)
+        .with_context(|| format!("open log {}", plan.web_log_path.display()))?;
+    let log_dup = log.try_clone().with_context(|| "clone log fd for stderr")?;
+
+    let child = Command::new(&plan.quiver_bin)
+        .arg("serve")
+        .arg("--port")
+        .arg(plan.web_port.to_string())
+        .stdin(Stdio::null())
+        .stdout(log)
+        .stderr(log_dup)
+        .process_group(0)
+        .spawn()
+        .with_context(|| format!("spawn {} serve", plan.quiver_bin))?;
+
+    let pid = child.id();
+    std::fs::write(&plan.web_pid_path, pid.to_string())
+        .with_context(|| format!("write pid file {}", plan.web_pid_path.display()))?;
+    Ok(pid)
+}
+
+#[cfg(not(unix))]
+fn spawn_web(_plan: &Plan) -> Result<u32> {
+    anyhow::bail!("web autostart not supported on this platform — run `quiver serve` manually")
 }
 
 fn write_meta_skill(plan: &Plan) -> Result<()> {
@@ -637,7 +762,37 @@ mod tests {
             project_path: root.to_path_buf(),
             agent_pid_path: root.join("agent.pid"),
             agent_log_path: root.join("agent.log"),
+            web_pid_path: root.join("web.pid"),
+            web_log_path: root.join("web.log"),
+            web_port: DEFAULT_WEB_PORT,
             quiver_bin: "quiver".into(),
+        }
+    }
+
+    #[test]
+    fn start_web_returns_already_running_for_live_pid() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut plan = test_plan(dir.path(), "skills/quiver-pilot/SKILL.md");
+        // Point web PID file at this very test process so kill(0) succeeds.
+        std::fs::write(&plan.web_pid_path, std::process::id().to_string()).unwrap();
+        // Use a non-existent binary so spawn_web would fail if reached —
+        // proves the early-return path was taken.
+        plan.quiver_bin = "/definitely/not/here/quiver".into();
+        match start_web(&plan) {
+            WebStatus::AlreadyRunning(pid) => assert_eq!(pid, std::process::id()),
+            other => panic!("expected AlreadyRunning, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn start_agent_returns_already_running_for_live_pid() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut plan = test_plan(dir.path(), "skills/quiver-pilot/SKILL.md");
+        std::fs::write(&plan.agent_pid_path, std::process::id().to_string()).unwrap();
+        plan.quiver_bin = "/definitely/not/here/quiver".into();
+        match start_agent(&plan) {
+            AgentStatus::AlreadyRunning(pid) => assert_eq!(pid, std::process::id()),
+            other => panic!("expected AlreadyRunning, got {other:?}"),
         }
     }
 

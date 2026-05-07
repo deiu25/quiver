@@ -24,7 +24,8 @@ use quiver_storage::{embeddings, fts, open, scores, sources, tools, usage};
 
 use crate::schema::{
     AddSourceParams, AddSourceResult, InfoParams, RecommendHit, RecommendParams, SearchHit,
-    SearchParams, ToolInfo, UsageEventBrief, UsageStatsParams, UsageStatsResult, UsageStatsRow,
+    SearchParams, ShouldInvokeParams, ShouldInvokeResult, ToolInfo, UsageEventBrief,
+    UsageStatsParams, UsageStatsResult, UsageStatsRow,
 };
 
 /// 2 KB upper bound on free-text task input fed to the embedder.
@@ -101,8 +102,16 @@ fn err(e: anyhow::Error) -> ErrorData {
 #[tool_router(server_handler)]
 impl QuiverServer {
     #[tool(
-        description = "Recommend tools for a free-text task using hybrid vec+FTS search. \
-                       Returns top-k tools (default 3) ordered by combined score."
+        description = "Authoritative tool router for the user's installed catalog. \
+                       Call before any non-trivial subtask (refactor, scaffold, debug, \
+                       search, doc lookup) to discover the right local skill / plugin / \
+                       MCP server. Returns top-k hits ordered by hybrid vec+FTS score \
+                       (0.0 to ~1.3 with success-rate boost). Score interpretation: \
+                       >= 0.75 = mandatory (project policy requires invoking it unless \
+                       the user explicitly chose another tool), 0.60-0.74 = strong \
+                       preference, 0.40-0.59 = hint, < 0.40 = noise. Default k=3. \
+                       Use `info` to fetch the full skill body when an excerpt is \
+                       truncated."
     )]
     fn recommend(&self, Parameters(p): Parameters<RecommendParams>) -> Result<String, ErrorData> {
         let k = p.k.unwrap_or(3).clamp(1, 50);
@@ -167,6 +176,135 @@ impl QuiverServer {
             })
             .collect();
         serde_json::to_string(&out).map_err(|e| err(anyhow!(e)))
+    }
+
+    #[tool(
+        description = "Decide whether to invoke a candidate tool or defer to Quiver's \
+                       top-1 recommendation. Use this as a cheap pre-flight check \
+                       before a Bash/Read/WebFetch detour to confirm Quiver does not \
+                       have a higher-confidence installed tool. Returns a decision \
+                       (`use_candidate` | `use_recommended` | `no_strong_signal`), the \
+                       top-1 hit, the score delta, and a one-line rationale."
+    )]
+    fn should_invoke(
+        &self,
+        Parameters(p): Parameters<ShouldInvokeParams>,
+    ) -> Result<String, ErrorData> {
+        let task: String = p.task.chars().take(TASK_INPUT_LIMIT).collect();
+        let candidate = p.candidate_tool.trim().to_string();
+
+        let q_emb = {
+            let mut emb = self
+                .state
+                .embedder
+                .lock()
+                .map_err(|e| err(anyhow!("{e}")))?;
+            if emb.is_none() {
+                tracing::info!("loading fastembed model (one-time)");
+                *emb = Some(Embedder::new().map_err(err)?);
+            }
+            emb.as_ref()
+                .expect("embedder just initialized")
+                .embed_one(&task)
+                .map_err(err)?
+        };
+
+        let conn = self.state.conn.lock().map_err(|e| err(anyhow!("{e}")))?;
+
+        let vec_sims: HashMap<String, f32> = embeddings::vec_search(&conn, &q_emb, VEC_CANDIDATES)
+            .map_err(err)?
+            .into_iter()
+            .map(|(id, dist)| (id, 1.0 - dist))
+            .collect();
+        let fts_query = build_fts_query(&task);
+        let fts_hits: HashMap<String, f32> = if fts_query.is_empty() {
+            HashMap::new()
+        } else {
+            fts::search(&conn, &fts_query, FTS_CANDIDATES)
+                .map(|rows| rows.into_iter().collect())
+                .unwrap_or_default()
+        };
+        let hits = search::hybrid_from_score_maps(&vec_sims, &fts_hits, 5, COS_WEIGHT, FTS_WEIGHT);
+        if hits.is_empty() {
+            let res = ShouldInvokeResult {
+                decision: "no_strong_signal".into(),
+                recommended: None,
+                delta: 0.0,
+                rationale: "Quiver catalog returned no hits for this task.".into(),
+                level: "silent".into(),
+            };
+            return serde_json::to_string(&res).map_err(|e| err(anyhow!(e)));
+        }
+
+        let metas: HashMap<String, _> = tools::list_all(&conn)
+            .map_err(err)?
+            .into_iter()
+            .map(|m| (m.id.clone(), m))
+            .collect();
+        let top = &hits[0];
+        let top_meta = metas.get(&top.tool_id);
+        let recommended = RecommendHit {
+            tool_id: top.tool_id.clone(),
+            score: top.score,
+            name: top_meta.map(|m| m.name.clone()).unwrap_or_default(),
+            description: top_meta.and_then(|m| m.description.clone()),
+            invocation: top_meta.and_then(|m| m.invocation.clone()),
+            install_path: top_meta.and_then(|m| m.install_path.clone()),
+        };
+        let candidate_score = hits
+            .iter()
+            .find(|h| {
+                h.tool_id == candidate
+                    || metas
+                        .get(&h.tool_id)
+                        .and_then(|m| m.invocation.as_deref())
+                        .map(|inv| inv.eq_ignore_ascii_case(&candidate))
+                        .unwrap_or(false)
+            })
+            .map(|h| h.score)
+            .unwrap_or(0.0);
+        let delta = top.score - candidate_score;
+
+        let thresholds = quiver_recommender::policy::Thresholds::from_env();
+        let policy = thresholds.classify(top.score);
+        let same = top.tool_id == candidate
+            || top_meta
+                .and_then(|m| m.invocation.as_deref())
+                .map(|inv| inv.eq_ignore_ascii_case(&candidate))
+                .unwrap_or(false);
+
+        let decision = if same {
+            "use_candidate"
+        } else if matches!(
+            policy,
+            quiver_recommender::policy::Policy::Strong
+                | quiver_recommender::policy::Policy::Mandatory,
+        ) && delta >= thresholds.tau_delta
+        {
+            "use_recommended"
+        } else if policy == quiver_recommender::policy::Policy::Silent {
+            "no_strong_signal"
+        } else {
+            "use_candidate"
+        };
+        let rationale = format!(
+            "top={} score={:.3} band={} candidate_score={:.3} Δ={:.3} τ_delta={:.2}",
+            top.tool_id,
+            top.score,
+            policy.as_str(),
+            candidate_score,
+            delta,
+            thresholds.tau_delta,
+        );
+
+        let res = ShouldInvokeResult {
+            decision: decision.into(),
+            recommended: Some(recommended),
+            delta,
+            rationale,
+            level: policy.as_str().into(),
+        };
+        serde_json::to_string(&res).map_err(|e| err(anyhow!(e)))
     }
 
     #[tool(description = "Keyword search over the catalog using FTS5 BM25.")]

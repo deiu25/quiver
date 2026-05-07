@@ -158,3 +158,34 @@ pub struct UsageStatsResult {
     pub recent_events: Vec<UsageEventBrief>,
     pub note: &'static str,
 }
+
+// ─── should_invoke ──────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ShouldInvokeParams {
+    /// Free-text task description ("write pytest fixtures for the auth module").
+    pub task: String,
+    /// The tool the model is about to call. Either an installed tool id
+    /// (`skill:python-testing`) or a built-in tool name (`Bash`, `Read`).
+    pub candidate_tool: String,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ShouldInvokeResult {
+    /// `"use_recommended"` — Quiver's top match scores ≥ 0.60 AND the
+    /// candidate's hybrid score is `tau_delta` lower (per `Thresholds`);
+    /// follow the recommendation. `"use_candidate"` — the candidate is
+    /// either the top match itself or close enough that no policy change
+    /// is warranted. `"no_strong_signal"` — top match below the Strong
+    /// band; exercise judgement.
+    pub decision: String,
+    /// Top-1 hit (always populated when at least one tool matches).
+    pub recommended: Option<RecommendHit>,
+    /// `top.score - candidate_score` (or `top.score` when the candidate
+    /// is not in the top-k window).
+    pub delta: f32,
+    /// Human-readable explanation of the band, threshold, and delta.
+    pub rationale: String,
+    /// Policy band of the top-1 ("silent" | "hint" | "strong" | "mandatory").
+    pub level: String,
+}

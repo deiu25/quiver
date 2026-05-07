@@ -40,7 +40,7 @@ enum Cmd {
     /// List catalogued tools
     List,
     /// Re-scan filesystem and refresh DB (also re-embeds every tool)
-    Sync,
+    Sync(commands::sync::SyncArgs),
     /// Recommend tools for a task
     Recommend {
         /// Free-text task description
@@ -165,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::List => commands::list::run().await,
-        Cmd::Sync => commands::sync::run().await,
+        Cmd::Sync(args) => commands::sync::run(args).await,
         Cmd::Recommend { task, json } => commands::recommend::run(task, json).await,
         Cmd::Info { id } => {
             println!("info({id:?}): not yet implemented (Phase 1 follow-up)");

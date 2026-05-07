@@ -3,6 +3,7 @@ pub mod git_clone;
 pub mod github_repo;
 pub mod llm_extract;
 pub mod mcp_json;
+pub mod mcp_npm;
 pub mod persist;
 pub mod plugin_json;
 pub mod plugin_manifest;

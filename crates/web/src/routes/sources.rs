@@ -83,11 +83,17 @@ async fn sync_sources(State(state): State<AppState>) -> WebResult<Response> {
     };
     let pool = state.pool.clone();
 
+    // `run_sync` is async (network-aware npm enrichment + LLM extract).
+    // r2d2's PooledConnection holds a `Connection` that is `Send` but
+    // `!Sync`, so `&Connection` cannot cross `.await`. Run the whole
+    // pipeline inside `spawn_blocking` and re-enter the tokio runtime
+    // for the async parts via `block_on`.
     let result = tokio::task::spawn_blocking(
         move || -> anyhow::Result<quiver_ingestion::sync::SyncReport> {
             let conn = pool.get()?;
             let home = PathBuf::from(std::env::var("HOME").unwrap_or_default());
-            quiver_ingestion::sync::run_sync(&conn, &embedder, &home)
+            tokio::runtime::Handle::current()
+                .block_on(async { quiver_ingestion::sync::run_sync(&conn, &embedder, &home).await })
         },
     )
     .await?;

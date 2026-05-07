@@ -45,6 +45,14 @@ pub struct InitArgs {
     /// populated and you only want to wire the hooks.
     #[arg(long)]
     pub no_sync: bool,
+    /// Forwarded to the initial `quiver sync` invocation: skip outgoing
+    /// HTTP (npm registry, LLM API). Cache hits still apply.
+    #[arg(long)]
+    pub no_network: bool,
+    /// Forwarded to the initial `quiver sync` invocation: skip the
+    /// LLM-assisted trigger/example/category extraction pass.
+    #[arg(long)]
+    pub no_llm: bool,
     /// Skip the Quiver MCP server entry merge into `~/.claude.json`.
     /// Default: wire it (so `mcp__quiver__recommend` / `info` are
     /// available mid-session for the model).
@@ -84,7 +92,7 @@ pub async fn run(args: InitArgs) -> Result<()> {
     }
 
     if !args.no_sync {
-        run_sync_if_needed().await?;
+        run_sync_if_needed(args.no_network, args.no_llm).await?;
     }
 
     apply_settings(&plan)?;
@@ -263,7 +271,7 @@ fn print_next_steps(plan: &Plan, agent: &AgentStatus, web: &WebStatus) {
     );
 }
 
-async fn run_sync_if_needed() -> Result<()> {
+async fn run_sync_if_needed(no_network: bool, no_llm: bool) -> Result<()> {
     let db = default_db_path()?;
     let conn = quiver_storage::open(&db)?;
     let any_tool: i64 =
@@ -274,7 +282,7 @@ async fn run_sync_if_needed() -> Result<()> {
     }
     drop(conn);
     eprintln!("[INIT] catalog is empty — running quiver sync");
-    crate::commands::sync::run().await
+    crate::commands::sync::run(crate::commands::sync::SyncArgs { no_network, no_llm }).await
 }
 
 fn apply_settings(plan: &Plan) -> Result<()> {

@@ -22,6 +22,7 @@ const M004: &str = include_str!("../migrations/004_embeddings.sql");
 const M005: &str = include_str!("../migrations/005_usage_uuid.sql");
 const M006: &str = include_str!("../migrations/006_agent_suggestions.sql");
 const M007: &str = include_str!("../migrations/007_mcp_npm_cache.sql");
+const M008: &str = include_str!("../migrations/008_mcp_npm_tombstone.sql");
 
 fn migrations() -> anyhow::Result<Vec<Migration>> {
     Ok(vec![
@@ -33,6 +34,8 @@ fn migrations() -> anyhow::Result<Vec<Migration>> {
         Migration::unapplied("V6__agent_suggestions", M006)
             .context("parse V6__agent_suggestions")?,
         Migration::unapplied("V7__mcp_npm_cache", M007).context("parse V7__mcp_npm_cache")?,
+        Migration::unapplied("V8__mcp_npm_tombstone", M008)
+            .context("parse V8__mcp_npm_tombstone")?,
     ])
 }
 

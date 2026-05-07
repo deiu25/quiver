@@ -19,7 +19,7 @@ use chrono::Utc;
 use rusqlite::Connection;
 use serde::Deserialize;
 
-use quiver_storage::mcp_npm::{self, DEFAULT_TTL_DAYS, NpmCacheRow};
+use quiver_storage::mcp_npm::{self, CacheStatus, DEFAULT_TTL_DAYS, NpmCacheRow};
 
 /// Default npm registry root. Tests inject a mock; production callers use
 /// this constant.
@@ -135,9 +135,22 @@ enum RepositoryField {
     },
 }
 
+/// Discriminated result from a registry fetch — separates the
+/// "package definitively does not exist" 404 case (caller persists a
+/// tombstone) from transient/parse errors (caller logs + retries
+/// next sync).
+#[derive(Debug)]
+pub enum FetchOutcome {
+    Found(NpmMetadata),
+    NotFound,
+}
+
 /// HTTP fetch + parse. No caching, no fallback — the orchestration layer
-/// owns those concerns.
-pub async fn fetch_npm_metadata(base_url: &str, pkg: &str) -> anyhow::Result<NpmMetadata> {
+/// owns those concerns. Returns:
+/// * `Ok(FetchOutcome::Found(meta))` on 2xx + parse success
+/// * `Ok(FetchOutcome::NotFound)` on 404 (caller tombstones)
+/// * `Err(_)` for everything else (timeout, 5xx, parse, …)
+pub async fn fetch_npm_metadata(base_url: &str, pkg: &str) -> anyhow::Result<FetchOutcome> {
     let url = format!("{base_url}/{pkg}/latest");
     let client = reqwest::Client::builder()
         .timeout(FETCH_TIMEOUT)
@@ -148,6 +161,9 @@ pub async fn fetch_npm_metadata(base_url: &str, pkg: &str) -> anyhow::Result<Npm
         .send()
         .await
         .with_context(|| format!("get {url}"))?;
+    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(FetchOutcome::NotFound);
+    }
     if !resp.status().is_success() {
         let s = resp.status();
         let t = resp.text().await.unwrap_or_default();
@@ -166,14 +182,14 @@ pub async fn fetch_npm_metadata(base_url: &str, pkg: &str) -> anyhow::Result<Npm
         .filter(|k| !k.is_empty())
         .collect();
 
-    Ok(NpmMetadata {
+    Ok(FetchOutcome::Found(NpmMetadata {
         package: pkg.to_string(),
         description: parsed.description.filter(|s| !s.trim().is_empty()),
         keywords,
         repository: repo_url.map(normalize_repo_url),
         homepage: parsed.homepage.filter(|s| !s.trim().is_empty()),
         readme: parsed.readme.filter(|s| !s.trim().is_empty()),
-    })
+    }))
 }
 
 /// `git+https://github.com/foo/bar.git` → `https://github.com/foo/bar`.
@@ -185,25 +201,41 @@ pub fn normalize_repo_url(raw: String) -> String {
     no_git.to_string()
 }
 
-/// Cache-aware enrichment: returns metadata from the local SQLite cache
-/// when fresh; on miss + `NetworkMode::Online` performs a registry fetch
-/// and persists the response. Network failures are returned to the caller
-/// as `Err` so they can decide whether to degrade silently.
+/// Cache-aware enrichment.
+///
+/// * Hit row → returns its metadata (no HTTP).
+/// * Tombstone (recent 404) → returns `None` (no HTTP).
+/// * Miss + `NetworkMode::Online` → fetch registry, then either upsert
+///   the metadata or upsert a tombstone (404). Returns `None` on 404.
+/// * Miss + `NetworkMode::Offline` → returns `None`.
+///
+/// Transient errors (timeout, 5xx, parse) are returned as `Err` so the
+/// caller can decide whether to log + skip; they do **not** poison the
+/// cache, so the next sync retries.
 pub async fn enrich_via_cache(
     conn: &Connection,
     base_url: &str,
     pkg: &str,
     network: NetworkMode,
 ) -> anyhow::Result<Option<NpmMetadata>> {
-    if let Some(row) = mcp_npm::get(conn, pkg, DEFAULT_TTL_DAYS)? {
-        return Ok(Some(row.into()));
+    match mcp_npm::get(conn, pkg, DEFAULT_TTL_DAYS)? {
+        CacheStatus::Found(row) => return Ok(Some(row.into())),
+        CacheStatus::NotFound => return Ok(None),
+        CacheStatus::Miss => {},
     }
     if network == NetworkMode::Offline {
         return Ok(None);
     }
-    let meta = fetch_npm_metadata(base_url, pkg).await?;
-    mcp_npm::upsert(conn, &meta.clone().into_cache_row(Utc::now()))?;
-    Ok(Some(meta))
+    match fetch_npm_metadata(base_url, pkg).await? {
+        FetchOutcome::Found(meta) => {
+            mcp_npm::upsert(conn, &meta.clone().into_cache_row(Utc::now()))?;
+            Ok(Some(meta))
+        },
+        FetchOutcome::NotFound => {
+            mcp_npm::upsert_tombstone(conn, pkg, Utc::now())?;
+            Ok(None)
+        },
+    }
 }
 
 #[cfg(test)]

@@ -155,14 +155,34 @@ async fn expired_cache_row_triggers_refetch() {
 }
 
 #[tokio::test]
-async fn registry_404_propagates_as_err() {
-    let (addr, _hits) = spawn_mock(json!({}), StatusCode::NOT_FOUND).await;
+async fn registry_404_writes_tombstone_and_suppresses_retry() {
+    let (addr, hits) = spawn_mock(json!({}), StatusCode::NOT_FOUND).await;
     let conn = fresh_db();
     let base = format!("http://{addr}");
-    let err = enrich_via_cache(&conn, &base, "@nope/missing", NetworkMode::Online)
+
+    // First call: registry returns 404 → caller gets Ok(None), tombstone
+    // upserted.
+    let res = enrich_via_cache(&conn, &base, "@nope/missing", NetworkMode::Online)
         .await
-        .unwrap_err();
-    assert!(format!("{err:#}").contains("404"));
+        .unwrap();
+    assert!(res.is_none(), "404 maps to Ok(None) for the caller");
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+
+    // Direct check: storage now has a tombstone for the package.
+    use quiver_storage::mcp_npm::{CacheStatus, DEFAULT_TTL_DAYS, get};
+    let status = get(&conn, "@nope/missing", DEFAULT_TTL_DAYS).unwrap();
+    assert_eq!(status, CacheStatus::NotFound);
+
+    // Second call within TTL: tombstone hit, no extra HTTP.
+    let res2 = enrich_via_cache(&conn, &base, "@nope/missing", NetworkMode::Online)
+        .await
+        .unwrap();
+    assert!(res2.is_none());
+    assert_eq!(
+        hits.load(Ordering::SeqCst),
+        1,
+        "tombstone must suppress retry within TTL"
+    );
 }
 
 #[tokio::test]

@@ -1,6 +1,6 @@
 //! Recommender relevance benchmark — PLAN §10 success criterion #2.
 //!
-//! Loads `benches/tasks.json` (50 synthetic tools + 50 paraphrased queries),
+//! Loads `benches/tasks.json` (53 synthetic tools + 53 paraphrased queries),
 //! ingests them through the same `persist_tools` pipeline `quiver sync` uses,
 //! then runs the shared `agent::recommend::top_k` pipeline for every task.
 //! Acceptance: ≥80% top-3 hit rate.
@@ -81,14 +81,14 @@ fn recommender_top3_hit_rate_meets_80_percent() {
     let bench = load_benchmark();
     assert_eq!(
         bench.tools.len(),
-        50,
-        "benchmark must have 50 tools (current: {})",
+        53,
+        "benchmark must have 53 tools (current: {})",
         bench.tools.len()
     );
     assert_eq!(
         bench.tasks.len(),
-        50,
-        "benchmark must have 50 tasks (current: {})",
+        53,
+        "benchmark must have 53 tasks (current: {})",
         bench.tasks.len()
     );
 
@@ -108,7 +108,7 @@ fn recommender_top3_hit_rate_meets_80_percent() {
 
     let metas: Vec<ToolMeta> = bench.tools.iter().map(synth_meta).collect();
     let count = persist_tools(&conn, &embedder, &metas).unwrap();
-    assert_eq!(count, 50);
+    assert_eq!(count, 53);
 
     let mut hits = 0usize;
     let mut misses: Vec<String> = Vec::new();

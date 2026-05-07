@@ -1,107 +1,484 @@
 {
   "_comment": "Recommender relevance benchmark v0.1. 50 synthetic tools with real-world flavored descriptions + 50 paraphrased task queries. Acceptance gate: ≥80% top-3 hit rate. See crates/agent/tests/relevance.rs.",
   "tools": [
-    { "id": "skill:design-md",          "name": "design-md",            "description": "Generate semantic design system DESIGN.md from screenshots and Stitch projects" },
-    { "id": "skill:enhance-prompt",     "name": "enhance-prompt",       "description": "Transform vague UI ideas into polished Stitch-optimized prompts" },
-    { "id": "cli:designlang",           "name": "designlang",           "description": "Grade and reverse-engineer designs from a public URL" },
-    { "id": "skill:ui-ux-pro-max",      "name": "ui-ux-pro-max",        "description": "UI UX design intelligence: 67 styles, 96 palettes, web and mobile blueprints" },
-    { "id": "plugin:caveman",           "name": "caveman",              "description": "Ultra-compressed terse output mode that strips articles and filler words" },
-    { "id": "skill:caveman-review",     "name": "caveman-review",       "description": "Compressed code review comments with severity tags and minimum noise" },
-    { "id": "skill:tdd-workflow",       "name": "tdd-workflow",         "description": "Test driven development workflow enforcing write tests first then implement" },
-    { "id": "skill:e2e-testing",        "name": "e2e-testing",          "description": "End to end testing patterns with Playwright Page Object Model and CI artifacts" },
-    { "id": "skill:python-testing",     "name": "python-testing",       "description": "Python testing strategies using pytest fixtures parametrize and coverage" },
-    { "id": "skill:rust-testing",       "name": "rust-testing",         "description": "Rust testing patterns including unit integration property tests and benchmarks" },
-    { "id": "skill:ai-slop-cleaner",    "name": "ai-slop-cleaner",      "description": "Clean AI generated code slop with regression safe refactoring of dead code and duplicates" },
-    { "id": "skill:refactor-cleaner",   "name": "refactor-cleaner",     "description": "Dead code cleanup using knip depcheck and ts-prune to safely remove unused exports" },
-    { "id": "skill:code-simplifier",    "name": "code-simplifier",      "description": "Simplify and refine code for clarity consistency and maintainability while preserving behaviour" },
-    { "id": "skill:doc-updater",        "name": "doc-updater",          "description": "Documentation and codemap specialist that runs update commands and refreshes README guides" },
-    { "id": "skill:comment-analyzer",   "name": "comment-analyzer",     "description": "Analyze code comments for accuracy completeness maintainability and rot risk" },
-    { "id": "skill:codebase-onboarding","name": "codebase-onboarding",  "description": "Analyze an unfamiliar codebase and generate a structured onboarding overview" },
-    { "id": "skill:code-reviewer",      "name": "code-reviewer",        "description": "Expert code review for quality security and maintainability after every change" },
-    { "id": "skill:security-reviewer",  "name": "security-reviewer",    "description": "Security vulnerability detection for OWASP top ten secrets injection and unsafe crypto" },
-    { "id": "skill:rust-reviewer",      "name": "rust-reviewer",        "description": "Rust code reviewer specialized in ownership lifetimes error handling and unsafe usage" },
-    { "id": "skill:python-reviewer",    "name": "python-reviewer",      "description": "Python reviewer for PEP 8 Pythonic idioms type hints and security" },
-    { "id": "skill:rust-build",         "name": "rust-build",           "description": "Fix Rust cargo build errors borrow checker issues and Cargo toml dependency problems" },
-    { "id": "skill:kotlin-build",       "name": "kotlin-build",         "description": "Fix Kotlin and Gradle build errors compiler warnings and plugin resolution failures" },
-    { "id": "skill:dart-build",         "name": "dart-build",           "description": "Fix Dart and Flutter analyzer errors pub dependency conflicts and build runner failures" },
-    { "id": "skill:cpp-build",          "name": "cpp-build",            "description": "Fix C++ build errors CMake issues and linker problems with minimal patches" },
-    { "id": "skill:git-master",         "name": "git-master",           "description": "Git expert for atomic commits rebasing and history management with style detection" },
-    { "id": "skill:prp-commit",         "name": "prp-commit",           "description": "Quick commit using natural language file targeting and conventional commit format" },
-    { "id": "skill:prp-pr",             "name": "prp-pr",               "description": "Create a GitHub pull request from current branch with unpushed commits and rich body" },
-    { "id": "skill:planner",            "name": "planner",              "description": "Strategic planning consultant for complex features and refactoring with interview workflow" },
-    { "id": "skill:code-architect",     "name": "code-architect",       "description": "Designs feature architectures by analyzing existing patterns and provides implementation blueprints" },
-    { "id": "skill:claude-api",         "name": "claude-api",           "description": "Build debug and optimize Anthropic Claude API and SDK applications with prompt caching" },
-    { "id": "skill:mcp-server-patterns","name": "mcp-server-patterns",  "description": "Build MCP servers with Node TypeScript SDK including tools resources and stdio transport" },
-    { "id": "skill:agent-payment-x402", "name": "agent-payment-x402",   "description": "Add x402 payment execution to AI agents for per task billing and HTTP 402 payment required" },
-    { "id": "skill:market-research",    "name": "market-research",      "description": "Conduct market research competitive analysis investor outreach and lead intelligence" },
-    { "id": "skill:investor-outreach",  "name": "investor-outreach",    "description": "Draft cold emails warm intro blurbs follow ups updates for venture capital outreach" },
-    { "id": "skill:manim-video",        "name": "manim-video",          "description": "Build reusable Manim explainer videos for technical concepts with mathematical animation" },
-    { "id": "skill:nextjs-turbopack",   "name": "nextjs-turbopack",     "description": "Next js 16 plus and Turbopack patterns including incremental bundling and FS routing" },
-    { "id": "skill:springboot-patterns","name": "springboot-patterns",  "description": "Spring Boot architecture patterns REST API design layered services and dependency injection" },
-    { "id": "skill:django-patterns",    "name": "django-patterns",      "description": "Django architecture patterns REST API design with DRF migrations and admin customization" },
-    { "id": "skill:laravel-patterns",   "name": "laravel-patterns",     "description": "Laravel architecture patterns routing controllers Eloquent ORM and queue workers" },
-    { "id": "skill:swiftui-patterns",   "name": "swiftui-patterns",     "description": "SwiftUI architecture patterns state management with observation and Combine publishers" },
-    { "id": "skill:postgres-patterns",  "name": "postgres-patterns",    "description": "PostgreSQL database patterns for query optimization indexes schema design and JSONB" },
-    { "id": "skill:docker-patterns",    "name": "docker-patterns",      "description": "Docker and Docker Compose patterns for local development multi stage builds and networking" },
-    { "id": "skill:deployment-patterns","name": "deployment-patterns",  "description": "Deployment workflows CI CD pipeline patterns Docker images and Kubernetes manifests" },
-    { "id": "skill:exa-search",         "name": "exa-search",           "description": "Neural web search via Exa MCP for code documentation and company research" },
-    { "id": "skill:documentation-lookup","name": "documentation-lookup", "description": "Look up library and framework documentation using Context7 MCP for up to date references" },
-    { "id": "skill:browser-qa",         "name": "browser-qa",           "description": "Automate visual testing and UI interactions in a headless browser with screenshots" },
-    { "id": "skill:remotion-video",     "name": "remotion-video",       "description": "Build polished walkthrough videos using Remotion in React with composition and timeline" },
-    { "id": "skill:seo",                "name": "seo",                  "description": "Audit plan and implement SEO improvements technical on page schema markup and core web vitals" },
-    { "id": "skill:accessibility",      "name": "accessibility",        "description": "Design implement and audit inclusive digital products WCAG 2.2 compliance for web and native" },
-    { "id": "skill:ralph",              "name": "ralph",                "description": "Self referential autonomous loop until task completion with continuous self correction" }
+    {
+      "id": "skill:design-md",
+      "name": "design-md",
+      "description": "Generate semantic design system DESIGN.md from screenshots and Stitch projects"
+    },
+    {
+      "id": "skill:enhance-prompt",
+      "name": "enhance-prompt",
+      "description": "Transform vague UI ideas into polished Stitch-optimized prompts"
+    },
+    {
+      "id": "cli:designlang",
+      "name": "designlang",
+      "description": "Grade and reverse-engineer designs from a public URL"
+    },
+    {
+      "id": "skill:ui-ux-pro-max",
+      "name": "ui-ux-pro-max",
+      "description": "UI UX design intelligence: 67 styles, 96 palettes, web and mobile blueprints"
+    },
+    {
+      "id": "plugin:caveman",
+      "name": "caveman",
+      "description": "Ultra-compressed terse output mode that strips articles and filler words"
+    },
+    {
+      "id": "skill:caveman-review",
+      "name": "caveman-review",
+      "description": "Compressed code review comments with severity tags and minimum noise"
+    },
+    {
+      "id": "skill:tdd-workflow",
+      "name": "tdd-workflow",
+      "description": "Test driven development workflow enforcing write tests first then implement"
+    },
+    {
+      "id": "skill:e2e-testing",
+      "name": "e2e-testing",
+      "description": "End to end testing patterns with Playwright Page Object Model and CI artifacts"
+    },
+    {
+      "id": "skill:python-testing",
+      "name": "python-testing",
+      "description": "Python testing strategies using pytest fixtures parametrize and coverage"
+    },
+    {
+      "id": "skill:rust-testing",
+      "name": "rust-testing",
+      "description": "Rust testing patterns including unit integration property tests and benchmarks"
+    },
+    {
+      "id": "skill:ai-slop-cleaner",
+      "name": "ai-slop-cleaner",
+      "description": "Clean AI generated code slop with regression safe refactoring of dead code and duplicates"
+    },
+    {
+      "id": "skill:refactor-cleaner",
+      "name": "refactor-cleaner",
+      "description": "Dead code cleanup using knip depcheck and ts-prune to safely remove unused exports"
+    },
+    {
+      "id": "skill:code-simplifier",
+      "name": "code-simplifier",
+      "description": "Simplify and refine code for clarity consistency and maintainability while preserving behaviour"
+    },
+    {
+      "id": "skill:doc-updater",
+      "name": "doc-updater",
+      "description": "Documentation and codemap specialist that runs update commands and refreshes README guides"
+    },
+    {
+      "id": "skill:comment-analyzer",
+      "name": "comment-analyzer",
+      "description": "Analyze code comments for accuracy completeness maintainability and rot risk"
+    },
+    {
+      "id": "skill:codebase-onboarding",
+      "name": "codebase-onboarding",
+      "description": "Analyze an unfamiliar codebase and generate a structured onboarding overview"
+    },
+    {
+      "id": "skill:code-reviewer",
+      "name": "code-reviewer",
+      "description": "Expert code review for quality security and maintainability after every change"
+    },
+    {
+      "id": "skill:security-reviewer",
+      "name": "security-reviewer",
+      "description": "Security vulnerability detection for OWASP top ten secrets injection and unsafe crypto"
+    },
+    {
+      "id": "skill:rust-reviewer",
+      "name": "rust-reviewer",
+      "description": "Rust code reviewer specialized in ownership lifetimes error handling and unsafe usage"
+    },
+    {
+      "id": "skill:python-reviewer",
+      "name": "python-reviewer",
+      "description": "Python reviewer for PEP 8 Pythonic idioms type hints and security"
+    },
+    {
+      "id": "skill:rust-build",
+      "name": "rust-build",
+      "description": "Fix Rust cargo build errors borrow checker issues and Cargo toml dependency problems"
+    },
+    {
+      "id": "skill:kotlin-build",
+      "name": "kotlin-build",
+      "description": "Fix Kotlin and Gradle build errors compiler warnings and plugin resolution failures"
+    },
+    {
+      "id": "skill:dart-build",
+      "name": "dart-build",
+      "description": "Fix Dart and Flutter analyzer errors pub dependency conflicts and build runner failures"
+    },
+    {
+      "id": "skill:cpp-build",
+      "name": "cpp-build",
+      "description": "Fix C++ build errors CMake issues and linker problems with minimal patches"
+    },
+    {
+      "id": "skill:git-master",
+      "name": "git-master",
+      "description": "Git expert for atomic commits rebasing and history management with style detection"
+    },
+    {
+      "id": "skill:prp-commit",
+      "name": "prp-commit",
+      "description": "Quick commit using natural language file targeting and conventional commit format"
+    },
+    {
+      "id": "skill:prp-pr",
+      "name": "prp-pr",
+      "description": "Create a GitHub pull request from current branch with unpushed commits and rich body"
+    },
+    {
+      "id": "skill:planner",
+      "name": "planner",
+      "description": "Strategic planning consultant for complex features and refactoring with interview workflow"
+    },
+    {
+      "id": "skill:code-architect",
+      "name": "code-architect",
+      "description": "Designs feature architectures by analyzing existing patterns and provides implementation blueprints"
+    },
+    {
+      "id": "skill:claude-api",
+      "name": "claude-api",
+      "description": "Build debug and optimize Anthropic Claude API and SDK applications with prompt caching"
+    },
+    {
+      "id": "skill:mcp-server-patterns",
+      "name": "mcp-server-patterns",
+      "description": "Build MCP servers with Node TypeScript SDK including tools resources and stdio transport"
+    },
+    {
+      "id": "skill:agent-payment-x402",
+      "name": "agent-payment-x402",
+      "description": "Add x402 payment execution to AI agents for per task billing and HTTP 402 payment required"
+    },
+    {
+      "id": "skill:market-research",
+      "name": "market-research",
+      "description": "Conduct market research competitive analysis investor outreach and lead intelligence"
+    },
+    {
+      "id": "skill:investor-outreach",
+      "name": "investor-outreach",
+      "description": "Draft cold emails warm intro blurbs follow ups updates for venture capital outreach"
+    },
+    {
+      "id": "skill:manim-video",
+      "name": "manim-video",
+      "description": "Build reusable Manim explainer videos for technical concepts with mathematical animation"
+    },
+    {
+      "id": "skill:nextjs-turbopack",
+      "name": "nextjs-turbopack",
+      "description": "Next js 16 plus and Turbopack patterns including incremental bundling and FS routing"
+    },
+    {
+      "id": "skill:springboot-patterns",
+      "name": "springboot-patterns",
+      "description": "Spring Boot architecture patterns REST API design layered services and dependency injection"
+    },
+    {
+      "id": "skill:django-patterns",
+      "name": "django-patterns",
+      "description": "Django architecture patterns REST API design with DRF migrations and admin customization"
+    },
+    {
+      "id": "skill:laravel-patterns",
+      "name": "laravel-patterns",
+      "description": "Laravel architecture patterns routing controllers Eloquent ORM and queue workers"
+    },
+    {
+      "id": "skill:swiftui-patterns",
+      "name": "swiftui-patterns",
+      "description": "SwiftUI architecture patterns state management with observation and Combine publishers"
+    },
+    {
+      "id": "skill:postgres-patterns",
+      "name": "postgres-patterns",
+      "description": "PostgreSQL database patterns for query optimization indexes schema design and JSONB"
+    },
+    {
+      "id": "skill:docker-patterns",
+      "name": "docker-patterns",
+      "description": "Docker and Docker Compose patterns for local development multi stage builds and networking"
+    },
+    {
+      "id": "skill:deployment-patterns",
+      "name": "deployment-patterns",
+      "description": "Deployment workflows CI CD pipeline patterns Docker images and Kubernetes manifests"
+    },
+    {
+      "id": "skill:exa-search",
+      "name": "exa-search",
+      "description": "Neural web search via Exa MCP for code documentation and company research"
+    },
+    {
+      "id": "skill:documentation-lookup",
+      "name": "documentation-lookup",
+      "description": "Look up library and framework documentation using Context7 MCP for up to date references"
+    },
+    {
+      "id": "skill:browser-qa",
+      "name": "browser-qa",
+      "description": "Automate visual testing and UI interactions in a headless browser with screenshots"
+    },
+    {
+      "id": "skill:remotion-video",
+      "name": "remotion-video",
+      "description": "Build polished walkthrough videos using Remotion in React with composition and timeline"
+    },
+    {
+      "id": "skill:seo",
+      "name": "seo",
+      "description": "Audit plan and implement SEO improvements technical on page schema markup and core web vitals"
+    },
+    {
+      "id": "skill:accessibility",
+      "name": "accessibility",
+      "description": "Design implement and audit inclusive digital products WCAG 2.2 compliance for web and native"
+    },
+    {
+      "id": "skill:ralph",
+      "name": "ralph",
+      "description": "Self referential autonomous loop until task completion with continuous self correction"
+    },
+    {
+      "id": "plugin:ui-ux-pro-max@ui-ux-pro-max-skill",
+      "name": "ui-ux-pro-max",
+      "description": "UI UX design intelligence for web and mobile with curated styles palettes font pairings charts and component patterns"
+    },
+    {
+      "id": "mcp:context7",
+      "name": "context7",
+      "description": "MCP server providing up to date library documentation and code examples fetched on demand for any framework"
+    },
+    {
+      "id": "plugin:everything-claude-code@everything-claude-code",
+      "name": "everything-claude-code",
+      "description": "Battle tested opinionated Claude Code plugin for engineering teams with agents skills and MCP servers"
+    }
   ],
   "tasks": [
-    { "task": "I need to extract design tokens from these Stitch screenshots",                              "expected": "skill:design-md" },
-    { "task": "Help me sharpen this rough UI idea into a Stitch ready prompt",                              "expected": "skill:enhance-prompt" },
-    { "task": "Reverse engineer the design language of a competitor landing page from a URL",              "expected": "cli:designlang" },
-    { "task": "Pick a color palette and typography style for a mobile dashboard",                          "expected": "skill:ui-ux-pro-max" },
-    { "task": "Switch to terse compressed output drop articles and filler",                                "expected": "plugin:caveman" },
-    { "task": "Give me a code review with no praise just severity tagged findings",                        "expected": "skill:caveman-review" },
-    { "task": "I want to write tests before implementing this new feature",                                "expected": "skill:tdd-workflow" },
-    { "task": "Set up Playwright end to end tests with page object model",                                 "expected": "skill:e2e-testing" },
-    { "task": "Add pytest fixtures and parametrized tests for this Python module",                         "expected": "skill:python-testing" },
-    { "task": "Write integration and property based tests for this Rust crate",                            "expected": "skill:rust-testing" },
-    { "task": "Clean up this AI generated mess with safe regression aware refactors",                      "expected": "skill:ai-slop-cleaner" },
-    { "task": "Find unused exports with knip and remove them",                                             "expected": "skill:refactor-cleaner" },
-    { "task": "Make this code clearer and more maintainable without changing behaviour",                   "expected": "skill:code-simplifier" },
-    { "task": "Refresh the README and update the codemap docs",                                            "expected": "skill:doc-updater" },
-    { "task": "Audit code comments for staleness and accuracy",                                            "expected": "skill:comment-analyzer" },
-    { "task": "I just joined this repo help me get oriented in the codebase",                              "expected": "skill:codebase-onboarding" },
-    { "task": "Review this diff for quality and best practices",                                           "expected": "skill:code-reviewer" },
-    { "task": "Scan for OWASP top ten vulnerabilities and leaked secrets",                                 "expected": "skill:security-reviewer" },
-    { "task": "Check this Rust code for unsafe usage and lifetime issues",                                 "expected": "skill:rust-reviewer" },
-    { "task": "Review this Python code for PEP 8 and type hint completeness",                              "expected": "skill:python-reviewer" },
-    { "task": "My cargo build is broken with borrow checker errors please fix",                            "expected": "skill:rust-build" },
-    { "task": "Gradle build is failing with Kotlin compiler errors",                                       "expected": "skill:kotlin-build" },
-    { "task": "Flutter pub get is conflicting and dart analyze fails",                                     "expected": "skill:dart-build" },
-    { "task": "CMake configuration broken with linker errors on this C++ project",                         "expected": "skill:cpp-build" },
-    { "task": "Help me rebase this branch and clean up commit history",                                    "expected": "skill:git-master" },
-    { "task": "Stage these specific files and write a conventional commit message",                        "expected": "skill:prp-commit" },
-    { "task": "Open a pull request on GitHub from my current branch",                                      "expected": "skill:prp-pr" },
-    { "task": "I need a strategic implementation plan for this big refactor",                              "expected": "skill:planner" },
-    { "task": "Design the architecture for a new authentication feature blueprint",                        "expected": "skill:code-architect" },
-    { "task": "Add prompt caching to my Anthropic API client",                                             "expected": "skill:claude-api" },
-    { "task": "Build a Model Context Protocol server using the Node TypeScript SDK",                       "expected": "skill:mcp-server-patterns" },
-    { "task": "Wire up x402 per task billing for my autonomous agent",                                     "expected": "skill:agent-payment-x402" },
-    { "task": "Run a competitive analysis of this market segment",                                         "expected": "skill:market-research" },
-    { "task": "Draft a cold email to a venture capital partner",                                           "expected": "skill:investor-outreach" },
-    { "task": "Animate this math concept as an explainer video",                                           "expected": "skill:manim-video" },
-    { "task": "Set up Next js 16 with Turbopack incremental bundling",                                     "expected": "skill:nextjs-turbopack" },
-    { "task": "Design a layered Spring Boot REST API service",                                             "expected": "skill:springboot-patterns" },
-    { "task": "Add Django REST Framework views and migrations",                                            "expected": "skill:django-patterns" },
-    { "task": "Wire up Eloquent models and queue workers in Laravel",                                      "expected": "skill:laravel-patterns" },
-    { "task": "Manage SwiftUI state with the new observation framework",                                   "expected": "skill:swiftui-patterns" },
-    { "task": "Optimize this PostgreSQL query with the right index and JSONB usage",                       "expected": "skill:postgres-patterns" },
-    { "task": "Write a multi stage Dockerfile and docker compose for local dev",                           "expected": "skill:docker-patterns" },
-    { "task": "Set up a CI CD pipeline that builds images and deploys to Kubernetes",                      "expected": "skill:deployment-patterns" },
-    { "task": "Search the web with neural ranking for company info",                                       "expected": "skill:exa-search" },
-    { "task": "Look up the current React Router 7 docs and code examples",                                 "expected": "skill:documentation-lookup" },
-    { "task": "Run UI smoke tests in a headless browser and capture screenshots",                          "expected": "skill:browser-qa" },
-    { "task": "Build a product walkthrough video in React with Remotion",                                  "expected": "skill:remotion-video" },
-    { "task": "Improve our technical SEO and core web vitals scores",                                      "expected": "skill:seo" },
-    { "task": "Audit this UI for WCAG 2.2 accessibility compliance",                                       "expected": "skill:accessibility" },
-    { "task": "Run an autonomous self correcting loop until the task is done",                             "expected": "skill:ralph" }
+    {
+      "task": "I need to extract design tokens from these Stitch screenshots",
+      "expected": "skill:design-md"
+    },
+    {
+      "task": "Help me sharpen this rough UI idea into a Stitch ready prompt",
+      "expected": "skill:enhance-prompt"
+    },
+    {
+      "task": "Reverse engineer the design language of a competitor landing page from a URL",
+      "expected": "cli:designlang"
+    },
+    {
+      "task": "Pick a color palette and typography style for a mobile dashboard",
+      "expected": "skill:ui-ux-pro-max"
+    },
+    {
+      "task": "Switch to terse compressed output drop articles and filler",
+      "expected": "plugin:caveman"
+    },
+    {
+      "task": "Give me a code review with no praise just severity tagged findings",
+      "expected": "skill:caveman-review"
+    },
+    {
+      "task": "I want to write tests before implementing this new feature",
+      "expected": "skill:tdd-workflow"
+    },
+    {
+      "task": "Set up Playwright end to end tests with page object model",
+      "expected": "skill:e2e-testing"
+    },
+    {
+      "task": "Add pytest fixtures and parametrized tests for this Python module",
+      "expected": "skill:python-testing"
+    },
+    {
+      "task": "Write integration and property based tests for this Rust crate",
+      "expected": "skill:rust-testing"
+    },
+    {
+      "task": "Clean up this AI generated mess with safe regression aware refactors",
+      "expected": "skill:ai-slop-cleaner"
+    },
+    {
+      "task": "Find unused exports with knip and remove them",
+      "expected": "skill:refactor-cleaner"
+    },
+    {
+      "task": "Make this code clearer and more maintainable without changing behaviour",
+      "expected": "skill:code-simplifier"
+    },
+    {
+      "task": "Refresh the README and update the codemap docs",
+      "expected": "skill:doc-updater"
+    },
+    {
+      "task": "Audit code comments for staleness and accuracy",
+      "expected": "skill:comment-analyzer"
+    },
+    {
+      "task": "I just joined this repo help me get oriented in the codebase",
+      "expected": "skill:codebase-onboarding"
+    },
+    {
+      "task": "Review this diff for quality and best practices",
+      "expected": "skill:code-reviewer"
+    },
+    {
+      "task": "Scan for OWASP top ten vulnerabilities and leaked secrets",
+      "expected": "skill:security-reviewer"
+    },
+    {
+      "task": "Check this Rust code for unsafe usage and lifetime issues",
+      "expected": "skill:rust-reviewer"
+    },
+    {
+      "task": "Review this Python code for PEP 8 and type hint completeness",
+      "expected": "skill:python-reviewer"
+    },
+    {
+      "task": "My cargo build is broken with borrow checker errors please fix",
+      "expected": "skill:rust-build"
+    },
+    {
+      "task": "Gradle build is failing with Kotlin compiler errors",
+      "expected": "skill:kotlin-build"
+    },
+    {
+      "task": "Flutter pub get is conflicting and dart analyze fails",
+      "expected": "skill:dart-build"
+    },
+    {
+      "task": "CMake configuration broken with linker errors on this C++ project",
+      "expected": "skill:cpp-build"
+    },
+    {
+      "task": "Help me rebase this branch and clean up commit history",
+      "expected": "skill:git-master"
+    },
+    {
+      "task": "Stage these specific files and write a conventional commit message",
+      "expected": "skill:prp-commit"
+    },
+    {
+      "task": "Open a pull request on GitHub from my current branch",
+      "expected": "skill:prp-pr"
+    },
+    {
+      "task": "I need a strategic implementation plan for this big refactor",
+      "expected": "skill:planner"
+    },
+    {
+      "task": "Design the architecture for a new authentication feature blueprint",
+      "expected": "skill:code-architect"
+    },
+    {
+      "task": "Add prompt caching to my Anthropic API client",
+      "expected": "skill:claude-api"
+    },
+    {
+      "task": "Build a Model Context Protocol server using the Node TypeScript SDK",
+      "expected": "skill:mcp-server-patterns"
+    },
+    {
+      "task": "Wire up x402 per task billing for my autonomous agent",
+      "expected": "skill:agent-payment-x402"
+    },
+    {
+      "task": "Run a competitive analysis of this market segment",
+      "expected": "skill:market-research"
+    },
+    {
+      "task": "Draft a cold email to a venture capital partner",
+      "expected": "skill:investor-outreach"
+    },
+    {
+      "task": "Animate this math concept as an explainer video",
+      "expected": "skill:manim-video"
+    },
+    {
+      "task": "Set up Next js 16 with Turbopack incremental bundling",
+      "expected": "skill:nextjs-turbopack"
+    },
+    {
+      "task": "Design a layered Spring Boot REST API service",
+      "expected": "skill:springboot-patterns"
+    },
+    {
+      "task": "Add Django REST Framework views and migrations",
+      "expected": "skill:django-patterns"
+    },
+    {
+      "task": "Wire up Eloquent models and queue workers in Laravel",
+      "expected": "skill:laravel-patterns"
+    },
+    {
+      "task": "Manage SwiftUI state with the new observation framework",
+      "expected": "skill:swiftui-patterns"
+    },
+    {
+      "task": "Optimize this PostgreSQL query with the right index and JSONB usage",
+      "expected": "skill:postgres-patterns"
+    },
+    {
+      "task": "Write a multi stage Dockerfile and docker compose for local dev",
+      "expected": "skill:docker-patterns"
+    },
+    {
+      "task": "Set up a CI CD pipeline that builds images and deploys to Kubernetes",
+      "expected": "skill:deployment-patterns"
+    },
+    {
+      "task": "Search the web with neural ranking for company info",
+      "expected": "skill:exa-search"
+    },
+    {
+      "task": "Look up the current React Router 7 docs and code examples",
+      "expected": "skill:documentation-lookup"
+    },
+    {
+      "task": "Run UI smoke tests in a headless browser and capture screenshots",
+      "expected": "skill:browser-qa"
+    },
+    {
+      "task": "Build a product walkthrough video in React with Remotion",
+      "expected": "skill:remotion-video"
+    },
+    {
+      "task": "Improve our technical SEO and core web vitals scores",
+      "expected": "skill:seo"
+    },
+    {
+      "task": "Audit this UI for WCAG 2.2 accessibility compliance",
+      "expected": "skill:accessibility"
+    },
+    {
+      "task": "Run an autonomous self correcting loop until the task is done",
+      "expected": "skill:ralph"
+    },
+    {
+      "task": "build a stunning UI design system with great typography and motion",
+      "expected": "plugin:ui-ux-pro-max@ui-ux-pro-max-skill"
+    },
+    {
+      "task": "fetch the latest nuxt 4 documentation while I write code",
+      "expected": "mcp:context7"
+    },
+    {
+      "task": "give me an opinionated battle tested claude code plugin for engineering teams",
+      "expected": "plugin:everything-claude-code@everything-claude-code"
+    }
   ]
 }

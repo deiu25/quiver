@@ -220,3 +220,55 @@ code, pre {
 .chip .muted {
   font-variant-numeric: tabular-nums;
 }
+
+/* Phase 8 v4 strict-mode tags + enforcement banner. */
+
+.tag.level-mandatory { background: rgba(248, 81, 73, 0.18); color: var(--bad); font-weight: 600; }
+.tag.level-strong    { background: rgba(210, 153, 34, 0.18); color: var(--warn); font-weight: 600; }
+.tag.level-hint      { background: rgba(139, 148, 158, 0.18); color: var(--muted); }
+
+.tag.vetoed   { background: rgba(248, 81, 73, 0.20); color: var(--bad); }
+.tag.bypassed { background: rgba(210, 153, 34, 0.20); color: var(--warn); }
+.tag.nudged   { background: rgba(88, 166, 255, 0.20); color: var(--accent); }
+.tag.fp       { background: rgba(163, 113, 247, 0.20); color: #a371f7; }
+
+.card.card-vetoed   { border-left: 3px solid var(--bad); }
+.card.card-bypassed { border-left: 3px solid var(--warn); }
+.card.card-fp       { opacity: 0.78; border-left: 3px solid #a371f7; }
+
+.btn-fp {
+  background: transparent;
+  color: #a371f7;
+  border: 1px solid #a371f7;
+  border-radius: 6px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.btn-fp:hover {
+  background: rgba(163, 113, 247, 0.12);
+  filter: none;
+}
+
+.muted.small { font-size: 0.78rem; }
+
+.enforce-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 1.25rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.enforce-banner.strict   { background: rgba(248, 81, 73, 0.10); color: var(--bad); }
+.enforce-banner.advisory { background: rgba(210, 153, 34, 0.10); color: var(--warn); }
+.enforce-banner.off      { background: rgba(139, 148, 158, 0.10); color: var(--muted); }
+.enforce-banner code     { background: transparent; padding: 0; }
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0 1rem 0;
+  flex-wrap: wrap;
+}

@@ -34,6 +34,13 @@ pub struct SuggestionRowView {
     pub suggested_str: String,
     pub accepted: bool,
     pub accepted_str: String,
+    /// Phase 8 v4 strict-mode signals.
+    pub level: String,
+    pub task_signature: String,
+    pub vetoed: bool,
+    pub bypassed: bool,
+    pub nudged: bool,
+    pub false_positive: bool,
     /// When true, the rendered fragment carries `hx-swap-oob="outerHTML"`
     /// so htmx replaces the existing `#suggestion-{id}` row in place.
     pub oob: bool,
@@ -130,7 +137,8 @@ fn poll_since(
     let cutoff = last_acc_check.to_rfc3339();
     let mut stmt = conn.prepare(
         "SELECT id, session_id, tool_id, task_text, score, suggested_at,
-                accepted, accepted_at
+                accepted, accepted_at,
+                level, task_signature, vetoed, bypassed, nudged, false_positive
          FROM agent_suggestions
          WHERE id > ?1
             OR (accepted = 1 AND accepted_at >= ?2)
@@ -146,6 +154,12 @@ fn poll_since(
             let suggested_at: String = r.get(5)?;
             let accepted: bool = r.get::<_, i64>(6)? != 0;
             let accepted_at: Option<String> = r.get(7)?;
+            let level: Option<String> = r.get(8)?;
+            let task_signature: Option<String> = r.get(9)?;
+            let vetoed: bool = r.get::<_, i64>(10)? != 0;
+            let bypassed: bool = r.get::<_, i64>(11)? != 0;
+            let nudged: bool = r.get::<_, i64>(12)? != 0;
+            let false_positive: bool = r.get::<_, i64>(13)? != 0;
             let oob = id <= last_id;
             Ok(SuggestionRowView {
                 id,
@@ -158,6 +172,12 @@ fn poll_since(
                 suggested_str: short_time(&suggested_at),
                 accepted,
                 accepted_str: accepted_at.as_deref().map(short_time).unwrap_or_default(),
+                level: level.unwrap_or_default(),
+                task_signature: task_signature.unwrap_or_default(),
+                vetoed,
+                bypassed,
+                nudged,
+                false_positive,
                 oob,
             })
         })?

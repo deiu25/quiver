@@ -12,6 +12,7 @@ use quiver_storage::suggestions;
 use crate::error::{WebError, WebResult};
 use crate::sse::{SuggestionRowView, suggestions_stream};
 use crate::state::AppState;
+use crate::views::enforce_label;
 
 const INITIAL_LIMIT: usize = 50;
 
@@ -20,47 +21,81 @@ pub fn routes() -> Router<AppState> {
         .route("/suggestions", get(suggestions_page))
         .route("/api/suggestions/stream", get(suggestions_stream))
         .route("/api/suggestions/:id/accept", post(accept_suggestion))
+        .route(
+            "/api/suggestions/:id/false_positive",
+            post(flag_false_positive),
+        )
 }
 
 #[derive(Template)]
 #[template(path = "suggestions.html")]
 struct SuggestionsPage {
     active: &'static str,
+    enforce: &'static str,
     rows: Vec<SuggestionRowView>,
+    level_filter: String,
 }
 
-async fn suggestions_page(State(state): State<AppState>) -> WebResult<Response> {
+async fn suggestions_page(
+    State(state): State<AppState>,
+    axum::extract::Query(q): axum::extract::Query<SuggestionsQuery>,
+) -> WebResult<Response> {
+    let level_filter = q.level.unwrap_or_default();
+    let level_filter_for_query = level_filter.clone();
     let rows: Vec<SuggestionRowView> = tokio::task::spawn_blocking(move || -> WebResult<_> {
         let conn = state.pool.get()?;
         let mut all = suggestions::list(&conn, None)?;
+        if !level_filter_for_query.is_empty() && level_filter_for_query != "all" {
+            all.retain(|s| s.level.as_deref() == Some(level_filter_for_query.as_str()));
+        }
         all.truncate(INITIAL_LIMIT);
         // Newest at the top of #feed; rendering goes top-down so we reverse
         // the DESC list back to ASC and rely on hx-swap="afterbegin" only for
         // SSE inserts.
-        Ok(all
-            .into_iter()
-            .map(|s| SuggestionRowView {
-                id: s.id,
-                session_id: s.session_id,
-                tool_id: s.tool_id,
-                task_text: s.task_text.unwrap_or_default(),
-                score_str: s
-                    .score
-                    .map(|sc| format!("{sc:.3}"))
-                    .unwrap_or_else(|| "—".to_string()),
-                suggested_str: short_time(&s.suggested_at),
-                accepted: s.accepted,
-                accepted_str: s.accepted_at.as_deref().map(short_time).unwrap_or_default(),
-                oob: false,
-            })
-            .collect())
+        Ok(all.into_iter().map(suggestion_to_view).collect())
     })
     .await??;
 
     render(SuggestionsPage {
         active: "suggestions",
+        enforce: enforce_label(),
         rows,
+        level_filter,
     })
+}
+
+#[derive(serde::Deserialize, Default)]
+struct SuggestionsQuery {
+    #[serde(default)]
+    level: Option<String>,
+}
+
+/// Public alias so sibling route modules (`vetoes`) can reuse the mapping.
+pub(crate) fn row_to_view(s: quiver_storage::suggestions::SuggestionRow) -> SuggestionRowView {
+    suggestion_to_view(s)
+}
+
+fn suggestion_to_view(s: quiver_storage::suggestions::SuggestionRow) -> SuggestionRowView {
+    SuggestionRowView {
+        id: s.id,
+        session_id: s.session_id,
+        tool_id: s.tool_id,
+        task_text: s.task_text.unwrap_or_default(),
+        score_str: s
+            .score
+            .map(|sc| format!("{sc:.3}"))
+            .unwrap_or_else(|| "—".to_string()),
+        suggested_str: short_time(&s.suggested_at),
+        accepted: s.accepted,
+        accepted_str: s.accepted_at.as_deref().map(short_time).unwrap_or_default(),
+        level: s.level.unwrap_or_default(),
+        task_signature: s.task_signature.unwrap_or_default(),
+        vetoed: s.vetoed,
+        bypassed: s.bypassed,
+        nudged: s.nudged,
+        false_positive: s.false_positive,
+        oob: false,
+    }
 }
 
 #[derive(Template)]
@@ -77,20 +112,25 @@ async fn accept_suggestion(
         let conn = state.pool.get()?;
         suggestions::mark_accepted_by_id(&conn, id, Utc::now())?;
         let fetched = suggestions::find_by_id(&conn, id)?;
-        Ok(fetched.map(|s| SuggestionRowView {
-            id: s.id,
-            session_id: s.session_id,
-            tool_id: s.tool_id,
-            task_text: s.task_text.unwrap_or_default(),
-            score_str: s
-                .score
-                .map(|sc| format!("{sc:.3}"))
-                .unwrap_or_else(|| "—".to_string()),
-            suggested_str: short_time(&s.suggested_at),
-            accepted: s.accepted,
-            accepted_str: s.accepted_at.as_deref().map(short_time).unwrap_or_default(),
-            oob: false,
-        }))
+        Ok(fetched.map(suggestion_to_view))
+    })
+    .await??;
+
+    match row {
+        Some(view) => render(SuggestionRowTpl { row: view }),
+        None => Ok((StatusCode::NOT_FOUND, "suggestion not found").into_response()),
+    }
+}
+
+async fn flag_false_positive(
+    Path(id): Path<i64>,
+    State(state): State<AppState>,
+) -> WebResult<Response> {
+    let row = tokio::task::spawn_blocking(move || -> WebResult<Option<SuggestionRowView>> {
+        let conn = state.pool.get()?;
+        suggestions::set_false_positive(&conn, id)?;
+        let fetched = suggestions::find_by_id(&conn, id)?;
+        Ok(fetched.map(suggestion_to_view))
     })
     .await??;
 

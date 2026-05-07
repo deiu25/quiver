@@ -1,7 +1,14 @@
-<div id="suggestion-{{ row.id }}" class="card"{% if row.oob %} hx-swap-oob="outerHTML"{% endif %}>
+<div id="suggestion-{{ row.id }}" class="card{% if row.vetoed %} card-vetoed{% endif %}{% if row.bypassed %} card-bypassed{% endif %}{% if row.false_positive %} card-fp{% endif %}"{% if row.oob %} hx-swap-oob="outerHTML"{% endif %}>
   <div class="row">
     {% if row.accepted %}<span class="dot ok"></span>{% else %}<span class="dot"></span>{% endif %}
     <a href="/tool/{{ row.tool_id }}"><strong>{{ row.tool_id }}</strong></a>
+    {% if !row.level.is_empty() %}
+      <span class="tag level-{{ row.level }}">{{ row.level }}</span>
+    {% endif %}
+    {% if row.vetoed %}<span class="tag vetoed" title="Quiver denied a competing tool call for this signature">vetoed</span>{% endif %}
+    {% if row.bypassed %}<span class="tag bypassed" title="Model retried the same call after the veto — likely false positive">bypassed</span>{% endif %}
+    {% if row.nudged %}<span class="tag nudged" title="Stop hook fired a circuit-breaker block referencing this row">stop-nudged</span>{% endif %}
+    {% if row.false_positive %}<span class="tag fp" title="Manually flagged as wrong via the web UI">false-positive</span>{% endif %}
     <span class="muted">· session <code>{{ row.session_id }}</code></span>
     <span class="spacer"></span>
     <span class="score">{{ row.suggested_str }} · score {{ row.score_str }}</span>
@@ -13,9 +20,21 @@
         Accept
       </button>
     {% endif %}
+    {% if !row.false_positive && (row.vetoed || row.bypassed) %}
+      <button class="btn-fp"
+              hx-post="/api/suggestions/{{ row.id }}/false_positive"
+              hx-target="#suggestion-{{ row.id }}"
+              hx-swap="outerHTML"
+              title="Tell Quiver this recommendation was wrong; feeds the auto-tuner.">
+        False positive
+      </button>
+    {% endif %}
   </div>
   {% if !row.task_text.is_empty() %}
     <p class="muted">{{ row.task_text }}</p>
+  {% endif %}
+  {% if !row.task_signature.is_empty() %}
+    <p class="muted small">signature: <code>{{ row.task_signature }}</code></p>
   {% endif %}
   {% if row.accepted %}
     <p class="muted"><span class="tag skill">accepted</span> at {{ row.accepted_str }}</p>

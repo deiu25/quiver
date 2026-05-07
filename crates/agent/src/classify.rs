@@ -1,4 +1,4 @@
-//! Optional Haiku-backed task classifier for the agent loop.
+//! Optional Sonnet-backed task classifier for the agent loop.
 //!
 //! Each `UserText` event is fed through a [`TaskClassifier`] before the
 //! recommender. The classifier returns:
@@ -12,13 +12,13 @@
 //!
 //!   * [`NoopClassifier`] — passthrough, `is_task=true`, `query=raw`. Used
 //!     when the agent is started without `--classify` / `QUIVER_TASK_CLASSIFIER`.
-//!   * [`HaikuClassifier`] — calls Anthropic API (`ANTHROPIC_API_KEY`) or local
+//!   * [`SonnetClassifier`] — calls Anthropic API (`ANTHROPIC_API_KEY`) or local
 //!     `claude` CLI. Mirrors the backend selection in
 //!     [`quiver_ingestion::llm_extract::ClaudeExtractor`]; same model, same
 //!     timeout pattern.
 //!
 //! The trait method never returns an error: every failure path inside
-//! `HaikuClassifier` (timeout, non-2xx, malformed JSON, missing CLI binary)
+//! `SonnetClassifier` (timeout, non-2xx, malformed JSON, missing CLI binary)
 //! logs a warning and falls back to passthrough so the agent never silently
 //! drops a real task because of a transient LLM glitch.
 
@@ -31,7 +31,7 @@ use serde_json::json;
 
 const RAW_TRUNCATE_BYTES: usize = 2000;
 const CLASSIFY_TIMEOUT: Duration = Duration::from_secs(15);
-const ANTHROPIC_MODEL: &str = "claude-haiku-4-5-20251001";
+const ANTHROPIC_MODEL: &str = "claude-sonnet-4-6";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const ANTHROPIC_URL: &str = "https://api.anthropic.com/v1/messages";
 
@@ -77,7 +77,7 @@ impl TaskClassifier for NoopClassifier {
     }
 }
 
-// ── HaikuClassifier ─────────────────────────────────────────────────────────
+// ── SonnetClassifier ────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub enum ClaudeBackend {
@@ -85,12 +85,12 @@ pub enum ClaudeBackend {
     Cli { binary: String },
 }
 
-pub struct HaikuClassifier {
+pub struct SonnetClassifier {
     backend: ClaudeBackend,
     timeout: Duration,
 }
 
-impl HaikuClassifier {
+impl SonnetClassifier {
     pub fn new(backend: ClaudeBackend) -> Self {
         Self {
             backend,
@@ -121,8 +121,8 @@ impl HaikuClassifier {
 
     pub fn label(&self) -> &'static str {
         match self.backend {
-            ClaudeBackend::Api { .. } => "haiku-api",
-            ClaudeBackend::Cli { .. } => "haiku-cli",
+            ClaudeBackend::Api { .. } => "sonnet-api",
+            ClaudeBackend::Cli { .. } => "sonnet-cli",
         }
     }
 
@@ -149,12 +149,12 @@ impl HaikuClassifier {
 }
 
 #[async_trait]
-impl TaskClassifier for HaikuClassifier {
+impl TaskClassifier for SonnetClassifier {
     async fn classify(&self, raw: &str) -> ClassifiedTask {
         match self.try_classify(raw).await {
             Ok(c) => c,
             Err(e) => {
-                tracing::warn!("haiku classify failed, passthrough: {e:#}");
+                tracing::warn!("sonnet classify failed, passthrough: {e:#}");
                 ClassifiedTask::passthrough(raw)
             },
         }

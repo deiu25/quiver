@@ -294,7 +294,7 @@ Phase 7 (local web UI on `quiver serve`) shipped — see the **Local web UI** co
 
 The v0.1 hardening pass landed CI (fmt + clippy + workspace tests on every push), a 50-task recommender relevance benchmark with a ≥80% top-3 acceptance gate (see [Benchmark](#benchmark)), and crates.io-ready packaging metadata on the `quiver` binary crate.
 
-Three deferred polish items (orthogonal, will land any time): cost extraction from JSONL `usage` field, optional Anthropic-SDK README distillation in `add`, and a Haiku 4.5 task classifier in front of the embedder.
+Three deferred polish items (orthogonal, will land any time): cost extraction from JSONL `usage` field, optional Anthropic-SDK README distillation in `add`, and a Sonnet 4.6 task classifier in front of the embedder.
 
 Optional future work: a thin browser extension that talks to the same `/api/*` routes from claude.ai, and per-source CRUD (add/update/remove) exposed in the web UI alongside the existing CLI commands.
 

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, anyhow};
-use quiver_agent::{AgentConfig, HaikuClassifier, run};
+use quiver_agent::{AgentConfig, SonnetClassifier, run};
 
 use crate::db_path::default_db_path;
 
@@ -21,12 +21,12 @@ pub async fn run_cmd(
     let mut cfg = AgentConfig::new(default_db_path()?, sessions_dir, hints_dir);
 
     if classify_flag || env_classify_enabled() {
-        let classifier = HaikuClassifier::detect().context(
+        let classifier = SonnetClassifier::detect().context(
             "--classify requested but no ANTHROPIC_API_KEY set and no `claude` CLI on PATH",
         )?;
         tracing::info!(
             backend = classifier.label(),
-            "haiku task classifier enabled"
+            "sonnet task classifier enabled"
         );
         cfg = cfg.with_classifier(Arc::new(classifier));
     }

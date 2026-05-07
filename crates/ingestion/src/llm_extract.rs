@@ -26,7 +26,7 @@ use serde_json::{Value, json};
 
 const README_TRUNCATE_BYTES: usize = 4000;
 const LLM_TIMEOUT: Duration = Duration::from_secs(15);
-const ANTHROPIC_MODEL: &str = "claude-haiku-4-5-20251001";
+const ANTHROPIC_MODEL: &str = "claude-sonnet-4-6";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const ANTHROPIC_URL: &str = "https://api.anthropic.com/v1/messages";
 

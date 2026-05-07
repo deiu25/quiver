@@ -17,7 +17,7 @@ mod engine;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub use classify::{ClassifiedTask, HaikuClassifier, NoopClassifier, TaskClassifier};
+pub use classify::{ClassifiedTask, NoopClassifier, SonnetClassifier, TaskClassifier};
 pub use digest::digest;
 pub use engine::run;
 

@@ -1,8 +1,8 @@
-//! Integration tests for the Phase 6 Haiku task classifier.
+//! Integration tests for the Phase 6 Sonnet task classifier.
 //!
 //! Spawns an `axum`-bound mock Anthropic server on a random localhost port
 //! (mirrors the pattern used in `crates/ingestion/tests/llm_extract.rs`) and
-//! drives `HaikuClassifier` end-to-end through the API path.
+//! drives `SonnetClassifier` end-to-end through the API path.
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -11,7 +11,7 @@ use axum::{Json, Router, http::StatusCode, routing::post};
 use serde_json::{Value, json};
 
 use quiver_agent::classify::ClaudeBackend;
-use quiver_agent::{ClassifiedTask, HaikuClassifier, NoopClassifier, TaskClassifier};
+use quiver_agent::{ClassifiedTask, NoopClassifier, SonnetClassifier, TaskClassifier};
 
 async fn spawn_mock(response_body: Value, delay: Option<Duration>) -> SocketAddr {
     let app = Router::new().route(
@@ -34,8 +34,8 @@ async fn spawn_mock(response_body: Value, delay: Option<Duration>) -> SocketAddr
     addr
 }
 
-fn classifier_for(addr: SocketAddr) -> HaikuClassifier {
-    HaikuClassifier::new(ClaudeBackend::Api {
+fn classifier_for(addr: SocketAddr) -> SonnetClassifier {
+    SonnetClassifier::new(ClaudeBackend::Api {
         api_key: "test-key".into(),
         base_url: format!("http://{addr}/v1/messages"),
     })
@@ -49,7 +49,7 @@ async fn noop_classifier_passes_through() {
 }
 
 #[tokio::test]
-async fn haiku_extracts_rewritten_query_for_real_task() {
+async fn sonnet_extracts_rewritten_query_for_real_task() {
     let payload = json!({
         "content": [
             {
@@ -69,7 +69,7 @@ async fn haiku_extracts_rewritten_query_for_real_task() {
 }
 
 #[tokio::test]
-async fn haiku_marks_chitchat_non_task() {
+async fn sonnet_marks_chitchat_non_task() {
     let payload = json!({
         "content": [
             { "type": "text", "text": "{\"is_task\":false,\"query\":\"\"}" }
@@ -84,7 +84,7 @@ async fn haiku_marks_chitchat_non_task() {
 }
 
 #[tokio::test]
-async fn haiku_passthrough_on_malformed_response() {
+async fn sonnet_passthrough_on_malformed_response() {
     let payload = json!({
         "content": [{ "type": "text", "text": "not valid json at all" }]
     });
@@ -99,7 +99,7 @@ async fn haiku_passthrough_on_malformed_response() {
 }
 
 #[tokio::test]
-async fn haiku_passthrough_on_timeout() {
+async fn sonnet_passthrough_on_timeout() {
     let payload = json!({
         "content": [{ "type": "text", "text": "{\"is_task\":true,\"query\":\"x\"}" }]
     });
@@ -113,7 +113,7 @@ async fn haiku_passthrough_on_timeout() {
 }
 
 #[tokio::test]
-async fn haiku_passthrough_on_empty_query_string() {
+async fn sonnet_passthrough_on_empty_query_string() {
     // Defensive: model returned is_task=true but forgot to fill the query —
     // engine should still get something useful (the raw text).
     let payload = json!({

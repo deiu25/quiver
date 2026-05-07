@@ -109,10 +109,10 @@ enum Cmd {
         /// Where to write `<session>.md` hints (default: $HOME/.claude/hints)
         #[arg(long)]
         hints_dir: Option<PathBuf>,
-        /// Pipe each user message through a Haiku 4.5 task classifier before
+        /// Pipe each user message through a Sonnet 4.6 task classifier before
         /// recommending. Filters chit-chat and rewrites prompts into focused
         /// queries. Requires `ANTHROPIC_API_KEY` or `claude` on PATH.
-        /// Equivalent to `QUIVER_TASK_CLASSIFIER=haiku`.
+        /// Equivalent to `QUIVER_TASK_CLASSIFIER=sonnet`.
         #[arg(long)]
         classify: bool,
     },

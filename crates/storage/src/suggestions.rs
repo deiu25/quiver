@@ -286,6 +286,105 @@ pub fn find_vetoed_row(
     }
 }
 
+/// Phase 8 v4 strict-mode aggregates over `agent_suggestions`.
+#[derive(Debug, Clone, Default)]
+pub struct VetoStats {
+    pub vetoed: i64,
+    pub bypassed: i64,
+    pub nudged: i64,
+    pub false_positives: i64,
+    pub mandatory_total: i64,
+    pub mandatory_accepted: i64,
+    /// Per-level counts: `(level, count)` for `'hint'`, `'strong'`, `'mandatory'`.
+    pub by_level: Vec<(String, i64)>,
+}
+
+/// Aggregate strict-mode counters since `cutoff`. Used by the Stats page +
+/// future auto-tuner.
+pub fn veto_stats(conn: &Connection, since: DateTime<Utc>) -> Result<VetoStats> {
+    let cutoff = since.to_rfc3339();
+    let row = conn.query_row(
+        "SELECT
+            COALESCE(SUM(vetoed), 0)         AS v,
+            COALESCE(SUM(bypassed), 0)       AS b,
+            COALESCE(SUM(nudged), 0)         AS n,
+            COALESCE(SUM(false_positive), 0) AS fp,
+            COALESCE(SUM(CASE WHEN level = 'mandatory' THEN 1 ELSE 0 END), 0) AS mt,
+            COALESCE(SUM(CASE WHEN level = 'mandatory' AND accepted = 1
+                              THEN 1 ELSE 0 END), 0) AS ma
+         FROM agent_suggestions
+         WHERE suggested_at >= ?",
+        params![cutoff],
+        |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, i64>(2)?,
+                r.get::<_, i64>(3)?,
+                r.get::<_, i64>(4)?,
+                r.get::<_, i64>(5)?,
+            ))
+        },
+    )?;
+
+    let mut stmt = conn.prepare(
+        "SELECT COALESCE(level, ''), COUNT(*)
+           FROM agent_suggestions
+          WHERE suggested_at >= ?
+            AND level IS NOT NULL
+          GROUP BY level",
+    )?;
+    let by_level: Vec<(String, i64)> = stmt
+        .query_map(params![cutoff], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(VetoStats {
+        vetoed: row.0,
+        bypassed: row.1,
+        nudged: row.2,
+        false_positives: row.3,
+        mandatory_total: row.4,
+        mandatory_accepted: row.5,
+        by_level,
+    })
+}
+
+/// Most-recent vetoed rows. Powers the `/vetoes` page.
+pub fn list_vetoed(conn: &Connection, limit: usize) -> Result<Vec<SuggestionRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, session_id, tool_id, task_text, score, suggested_at,
+                accepted, accepted_at,
+                level, task_signature, vetoed, bypassed, nudged, false_positive
+           FROM agent_suggestions
+          WHERE vetoed = 1
+          ORDER BY suggested_at DESC
+          LIMIT ?",
+    )?;
+    let rows = stmt
+        .query_map(params![limit as i64], |r| {
+            Ok(SuggestionRow {
+                id: r.get(0)?,
+                session_id: r.get(1)?,
+                tool_id: r.get(2)?,
+                task_text: r.get(3)?,
+                score: r.get(4)?,
+                suggested_at: r.get(5)?,
+                accepted: r.get::<_, i64>(6)? != 0,
+                accepted_at: r.get(7)?,
+                level: r.get(8)?,
+                task_signature: r.get(9)?,
+                vetoed: r.get::<_, i64>(10)? != 0,
+                bypassed: r.get::<_, i64>(11)? != 0,
+                nudged: r.get::<_, i64>(12)? != 0,
+                false_positive: r.get::<_, i64>(13)? != 0,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 /// `(suggested_count, accepted_count)` since `cutoff`.
 pub fn acceptance_stats(conn: &Connection, since: DateTime<Utc>) -> Result<(i64, i64)> {
     let cutoff = since.to_rfc3339();

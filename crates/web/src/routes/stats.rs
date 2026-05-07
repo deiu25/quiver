@@ -14,7 +14,7 @@ use rusqlite::Connection;
 
 use crate::error::{WebError, WebResult};
 use crate::state::AppState;
-use crate::views::type_label;
+use crate::views::{enforce_label, type_label};
 
 pub fn routes() -> Router<AppState> {
     Router::new().route("/stats", get(stats_page))
@@ -24,10 +24,30 @@ pub fn routes() -> Router<AppState> {
 #[template(path = "stats.html")]
 struct StatsPage {
     active: &'static str,
+    enforce: &'static str,
     acceptance: AcceptanceView,
+    veto_stats: VetoStatsView,
+    level_breakdown: Vec<LevelCountView>,
     top_tools: Vec<TopToolView>,
     dead_weight: Vec<DeadToolView>,
     sources: Vec<SourceCountView>,
+}
+
+pub struct VetoStatsView {
+    pub vetoed: i64,
+    pub bypassed: i64,
+    pub nudged: i64,
+    pub false_positives: i64,
+    pub bypass_rate_pct_str: String,
+    pub mandatory_total: i64,
+    pub mandatory_accepted: i64,
+    pub mandatory_rate_pct_str: String,
+}
+
+pub struct LevelCountView {
+    pub level: &'static str,
+    pub count: i64,
+    pub bar_width_px: i64,
 }
 
 pub struct AcceptanceView {
@@ -66,7 +86,10 @@ async fn stats_page(State(state): State<AppState>) -> WebResult<Response> {
 
     render(StatsPage {
         active: "stats",
+        enforce: enforce_label(),
         acceptance: stats.acceptance,
+        veto_stats: stats.veto_stats,
+        level_breakdown: stats.level_breakdown,
         top_tools: stats.top_tools,
         dead_weight: stats.dead_weight,
         sources: stats.sources,
@@ -75,6 +98,8 @@ async fn stats_page(State(state): State<AppState>) -> WebResult<Response> {
 
 struct StatsData {
     acceptance: AcceptanceView,
+    veto_stats: VetoStatsView,
+    level_breakdown: Vec<LevelCountView>,
     top_tools: Vec<TopToolView>,
     dead_weight: Vec<DeadToolView>,
     sources: Vec<SourceCountView>,
@@ -93,6 +118,50 @@ fn load(conn: &Connection) -> anyhow::Result<StatsData> {
         accepted,
         rate_pct_str: format!("{rate_pct:.1}"),
     };
+    let veto = suggestions::veto_stats(conn, now - Duration::days(7))?;
+    let bypass_rate = if veto.vetoed == 0 {
+        0.0
+    } else {
+        (veto.bypassed as f64) * 100.0 / (veto.vetoed as f64)
+    };
+    let mandatory_rate = if veto.mandatory_total == 0 {
+        0.0
+    } else {
+        (veto.mandatory_accepted as f64) * 100.0 / (veto.mandatory_total as f64)
+    };
+    let veto_stats = VetoStatsView {
+        vetoed: veto.vetoed,
+        bypassed: veto.bypassed,
+        nudged: veto.nudged,
+        false_positives: veto.false_positives,
+        bypass_rate_pct_str: format!("{bypass_rate:.1}"),
+        mandatory_total: veto.mandatory_total,
+        mandatory_accepted: veto.mandatory_accepted,
+        mandatory_rate_pct_str: format!("{mandatory_rate:.1}"),
+    };
+    let max_level_count = veto
+        .by_level
+        .iter()
+        .map(|(_, c)| *c)
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let level_breakdown: Vec<LevelCountView> = ["mandatory", "strong", "hint"]
+        .into_iter()
+        .map(|name| {
+            let count = veto
+                .by_level
+                .iter()
+                .find(|(l, _)| l == name)
+                .map(|(_, c)| *c)
+                .unwrap_or(0);
+            LevelCountView {
+                level: name,
+                count,
+                bar_width_px: ((count as f64 / max_level_count as f64) * 80.0).round() as i64,
+            }
+        })
+        .collect();
 
     let score_rows = scores::list(conn, None)?;
     let mut combined: Vec<(String, f64, i64, f64, Option<f64>)> = score_rows
@@ -170,6 +239,8 @@ fn load(conn: &Connection) -> anyhow::Result<StatsData> {
 
     Ok(StatsData {
         acceptance,
+        veto_stats,
+        level_breakdown,
         top_tools,
         dead_weight,
         sources,

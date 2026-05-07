@@ -11,6 +11,7 @@ pub mod recommend;
 pub mod sources;
 pub mod stats;
 pub mod suggestions;
+pub mod vetoes;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -23,6 +24,7 @@ pub fn router(state: AppState) -> Router {
         .merge(sources::routes())
         .merge(stats::routes())
         .merge(suggestions::routes())
+        .merge(vetoes::routes())
         .route("/static/*path", get(serve_static))
         .with_state(state)
 }

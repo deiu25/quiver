@@ -12,7 +12,7 @@ use serde::Deserialize;
 
 use crate::error::{WebError, WebResult};
 use crate::state::AppState;
-use crate::views::{ScoreView, ToolView, parse_type_filter};
+use crate::views::{ScoreView, ToolView, enforce_label, parse_type_filter};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -33,6 +33,7 @@ pub struct CatalogQuery {
 #[template(path = "catalog.html")]
 struct CatalogPage {
     active: &'static str,
+    enforce: &'static str,
     q: String,
     type_filter: String,
     tools: Vec<ToolView>,
@@ -119,6 +120,7 @@ fn build_chips(c: &TypeCounts) -> Vec<ChipView> {
 #[template(path = "tool_detail.html")]
 struct ToolDetailPage {
     active: &'static str,
+    enforce: &'static str,
     tool: ToolView,
     score: Option<ScoreView>,
 }
@@ -140,6 +142,7 @@ async fn catalog_page(
     let chips = build_chips(&counts);
     let page = CatalogPage {
         active: "catalog",
+        enforce: enforce_label(),
         total: tools.len(),
         q: needle,
         type_filter: q.type_filter,
@@ -186,6 +189,7 @@ async fn tool_detail(State(state): State<AppState>, Path(id): Path<String>) -> W
     };
     render(ToolDetailPage {
         active: "catalog",
+        enforce: enforce_label(),
         tool,
         score,
     })

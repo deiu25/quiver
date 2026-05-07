@@ -99,6 +99,28 @@ pub fn parse_type_filter(s: &str) -> Option<ToolType> {
     }
 }
 
+/// Read `QUIVER_ENFORCE` once per request and return one of the canonical
+/// labels (`"strict"`, `"advisory"`, `"off"`). Default `strict` matches the
+/// hook handler's `EnforceMode::from_env`. The base template uses the value
+/// to colour the global enforcement banner.
+pub fn enforce_label() -> &'static str {
+    if std::env::var("QUIVER_HOOK_DISABLED").as_deref() == Ok("1") {
+        return "off";
+    }
+    match std::env::var("QUIVER_ENFORCE")
+        .ok()
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "advisory" | "soft" | "hint" => "advisory",
+        "off" | "disabled" | "no" | "0" => "off",
+        _ => "strict",
+    }
+}
+
 pub struct ScoreView {
     pub success_rate_pct: String,
     pub sample_size: i64,

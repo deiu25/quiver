@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Vetoes · Quiver{% endblock %}
+{% block content %}
+<h1>Vetoes <span class="muted">last {{ rows.len() }}</span></h1>
+<p class="muted">
+  Each row is a PreToolUse veto Quiver fired against the model's chosen tool
+  in favour of a higher-confidence catalog match. Re-invocations of the same
+  tool are tagged <span class="tag bypassed">bypassed</span> — strong
+  false-positive signal. Click <strong>False positive</strong> to flag a row
+  manually so the auto-tuner sees it.
+</p>
+<div class="filter-bar">
+  <span class="chip active">Total <span class="muted">{{ total }}</span></span>
+  <span class="chip">Bypassed <span class="muted">{{ bypassed }}</span></span>
+  <span class="chip">False positives <span class="muted">{{ false_positives }}</span></span>
+</div>
+
+<div id="feed">
+  {% if rows.is_empty() %}
+    <p class="muted">
+      No vetoes yet. Either you ran a clean session or
+      <code>QUIVER_ENFORCE</code> is not <code>strict</code>.
+    </p>
+  {% else %}
+    {% for row in rows %}
+      {% include "suggestion_row.html" %}
+    {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

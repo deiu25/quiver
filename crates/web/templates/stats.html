@@ -12,6 +12,45 @@
   </table>
 </div>
 
+<h2>Strict-mode signals (last 7 days)</h2>
+<div class="card">
+  <table>
+    <tr><th>PreToolUse vetoes</th><td>{{ veto_stats.vetoed }}</td></tr>
+    <tr>
+      <th>Bypassed (model retried after deny)</th>
+      <td>
+        {{ veto_stats.bypassed }}
+        <span class="muted">({{ veto_stats.bypass_rate_pct_str }}% of vetoes)</span>
+      </td>
+    </tr>
+    <tr><th>Stop-hook nudges</th><td>{{ veto_stats.nudged }}</td></tr>
+    <tr><th>Manual false-positive flags</th><td>{{ veto_stats.false_positives }}</td></tr>
+    <tr>
+      <th>Mandatory recommendations</th>
+      <td>
+        {{ veto_stats.mandatory_total }}
+        <span class="muted">({{ veto_stats.mandatory_accepted }} accepted, {{ veto_stats.mandatory_rate_pct_str }}%)</span>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<h2>Suggestions by level</h2>
+<table>
+  <thead>
+    <tr><th>Level</th><th>Count</th><th>&nbsp;</th></tr>
+  </thead>
+  <tbody>
+    {% for l in level_breakdown %}
+    <tr>
+      <td><span class="tag level-{{ l.level }}">{{ l.level }}</span></td>
+      <td class="score">{{ l.count }}</td>
+      <td><span class="bar" style="width:{{ l.bar_width_px }}px"></span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
 <h2>Top tools (success&nbsp;×&nbsp;log&nbsp;samples)</h2>
 {% if top_tools.is_empty() %}
   <p class="muted">No score rows yet — run <code>quiver agent</code> + <code>quiver score</code>.</p>

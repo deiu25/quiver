@@ -5,8 +5,20 @@
 <p class="muted">
   Each row is a top-1 recommendation the agent surfaced for a watched session.
   Rows turn green and tagged <span class="tag skill">accepted</span> when you
-  invoke the tool within the acceptance window.
+  invoke the tool within the acceptance window. Strict-mode signals show as
+  badges: <span class="tag level-mandatory">mandatory</span>,
+  <span class="tag level-strong">strong</span>,
+  <span class="tag level-hint">hint</span>,
+  <span class="tag vetoed">vetoed</span>,
+  <span class="tag bypassed">bypassed</span>,
+  <span class="tag nudged">stop-nudged</span>.
 </p>
+<div class="filter-bar">
+  <a href="/suggestions" class="chip {% if level_filter.is_empty() || level_filter == "all" %}active{% endif %}">All</a>
+  <a href="/suggestions?level=mandatory" class="chip {% if level_filter == "mandatory" %}active{% endif %}">Mandatory</a>
+  <a href="/suggestions?level=strong" class="chip {% if level_filter == "strong" %}active{% endif %}">Strong</a>
+  <a href="/suggestions?level=hint" class="chip {% if level_filter == "hint" %}active{% endif %}">Hint</a>
+</div>
 
 <div id="feed"
      hx-ext="sse"

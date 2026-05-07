@@ -11,6 +11,7 @@ use serde::Deserialize;
 
 use crate::error::{WebError, WebResult};
 use crate::state::AppState;
+use crate::views::enforce_label;
 
 const TOP_K: usize = 3;
 
@@ -24,6 +25,7 @@ pub fn routes() -> Router<AppState> {
 #[template(path = "recommend.html")]
 struct RecommendPage {
     active: &'static str,
+    enforce: &'static str,
 }
 
 #[derive(Template)]
@@ -59,6 +61,7 @@ pub struct RecForm {
 async fn recommend_page() -> WebResult<Response> {
     render(RecommendPage {
         active: "recommend",
+        enforce: enforce_label(),
     })
 }
 

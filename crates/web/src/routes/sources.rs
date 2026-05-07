@@ -11,6 +11,7 @@ use quiver_storage::sources::{self, SourceRow};
 
 use crate::error::{WebError, WebResult};
 use crate::state::AppState;
+use crate::views::enforce_label;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -22,6 +23,7 @@ pub fn routes() -> Router<AppState> {
 #[template(path = "sources.html")]
 struct SourcesPage {
     active: &'static str,
+    enforce: &'static str,
     sources: Vec<SourceView>,
 }
 
@@ -73,6 +75,7 @@ async fn sources_page(State(state): State<AppState>) -> WebResult<Response> {
 
     render(SourcesPage {
         active: "sources",
+        enforce: enforce_label(),
         sources: rows,
     })
 }

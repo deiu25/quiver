@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use quiver_recommender::params::{
     COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
 };
-use quiver_recommender::rerank::{Reranker, SuccessReranker};
+use quiver_recommender::rerank::{DemeritReranker, Reranker, SuccessReranker};
 use quiver_recommender::{embed::Embedder, search};
 use quiver_storage::{embeddings, fts, open, tools};
 use serde::Serialize;
@@ -67,6 +67,7 @@ pub async fn run(task: String, json: bool) -> anyhow::Result<()> {
         FTS_WEIGHT,
     );
     SuccessReranker::default().apply(&mut hits, &conn)?;
+    DemeritReranker::new(&task).apply(&mut hits, &conn)?;
     hits.truncate(3);
 
     let by_id: HashMap<String, _> = tools::list_all(&conn)?

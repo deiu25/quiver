@@ -19,6 +19,7 @@ use quiver_recommender::embed::Embedder;
 use quiver_recommender::params::{
     COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
 };
+use quiver_recommender::rerank::{DemeritReranker, Reranker};
 use quiver_recommender::search;
 use quiver_storage::{embeddings, fts, open, scores, sources, tools, usage};
 
@@ -154,7 +155,11 @@ impl QuiverServer {
             }
         };
 
-        let hits = search::hybrid_from_score_maps(&vec_sims, &fts_hits, k, COS_WEIGHT, FTS_WEIGHT);
+        let mut hits =
+            search::hybrid_from_score_maps(&vec_sims, &fts_hits, k, COS_WEIGHT, FTS_WEIGHT);
+        DemeritReranker::new(&task)
+            .apply(&mut hits, &conn)
+            .map_err(err)?;
         let metas: HashMap<String, _> = tools::list_all(&conn)
             .map_err(err)?
             .into_iter()
@@ -224,7 +229,11 @@ impl QuiverServer {
                 .map(|rows| rows.into_iter().collect())
                 .unwrap_or_default()
         };
-        let hits = search::hybrid_from_score_maps(&vec_sims, &fts_hits, 5, COS_WEIGHT, FTS_WEIGHT);
+        let mut hits =
+            search::hybrid_from_score_maps(&vec_sims, &fts_hits, 5, COS_WEIGHT, FTS_WEIGHT);
+        DemeritReranker::new(&task)
+            .apply(&mut hits, &conn)
+            .map_err(err)?;
         if hits.is_empty() {
             let res = ShouldInvokeResult {
                 decision: "no_strong_signal".into(),

@@ -84,6 +84,35 @@
 </table>
 {% endif %}
 
+<h2>Top demerited tools (auto-tuner)</h2>
+{% if demerits.is_empty() %}
+  <p class="muted">No false-positive or bypass feedback recorded yet — auto-tuner has nothing to demote.</p>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>Tool</th>
+      <th>Demerit</th>
+      <th>Top FP signature</th>
+      <th>Distinct sigs</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in demerits %}
+    <tr>
+      <td><a href="/tool/{{ d.tool_id }}">{{ d.tool_id }}</a></td>
+      <td>
+        <span class="bar" style="width:{{ d.bar_width_px }}px"></span>
+        <span class="score">{{ d.demerit_str }}</span>
+      </td>
+      <td class="muted"><code>{{ d.top_sig }}</code></td>
+      <td class="score">{{ d.sig_count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
 <h2>Dead weight (no usage in 30 days)</h2>
 {% if dead_weight.is_empty() %}
   <p class="muted">Every tool was used at least once in the last 30 days.</p>

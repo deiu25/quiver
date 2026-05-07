@@ -98,12 +98,44 @@ pub async fn run(tool: Option<String>, top: usize, json: bool) -> anyhow::Result
     });
     rows.truncate(top);
 
+    let demerits = scores::list_demerits(&conn, 10)?;
     if json {
-        println!("{}", serde_json::to_string_pretty(&rows)?);
+        let payload = serde_json::json!({
+            "top_tools": rows,
+            "demerits": demerits.iter().map(|r| serde_json::json!({
+                "tool_id": r.tool_id,
+                "demerit_count": r.demerit_count,
+                "demerit_signatures_json": r.demerit_signatures_json,
+            })).collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
     } else {
         print_table(&rows);
+        print_demerits(&demerits);
     }
     Ok(())
+}
+
+fn print_demerits(rows: &[scores::ScoreRow]) {
+    if rows.is_empty() {
+        return;
+    }
+    println!("\nauto-tuner demerits (FP + bypass, decayed):");
+    for r in rows {
+        let top_sig = r
+            .demerit_signatures_json
+            .as_deref()
+            .and_then(|s| serde_json::from_str::<Vec<serde_json::Value>>(s).ok())
+            .and_then(|v| v.into_iter().next())
+            .and_then(|d| d.get("sig").and_then(|s| s.as_str()).map(str::to_string))
+            .unwrap_or_else(|| "—".into());
+        println!(
+            "  {:<40}  count={:>5.2}  top_sig={}",
+            truncate_inline(&r.tool_id, 40),
+            r.demerit_count,
+            top_sig,
+        );
+    }
 }
 
 fn build_row(conn: &rusqlite::Connection, id: &str) -> anyhow::Result<StatsRow> {

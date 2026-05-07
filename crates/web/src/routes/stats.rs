@@ -29,8 +29,17 @@ struct StatsPage {
     veto_stats: VetoStatsView,
     level_breakdown: Vec<LevelCountView>,
     top_tools: Vec<TopToolView>,
+    demerits: Vec<DemeritToolView>,
     dead_weight: Vec<DeadToolView>,
     sources: Vec<SourceCountView>,
+}
+
+pub struct DemeritToolView {
+    pub tool_id: String,
+    pub demerit_str: String,
+    pub bar_width_px: i64,
+    pub top_sig: String,
+    pub sig_count: usize,
 }
 
 pub struct VetoStatsView {
@@ -91,6 +100,7 @@ async fn stats_page(State(state): State<AppState>) -> WebResult<Response> {
         veto_stats: stats.veto_stats,
         level_breakdown: stats.level_breakdown,
         top_tools: stats.top_tools,
+        demerits: stats.demerits,
         dead_weight: stats.dead_weight,
         sources: stats.sources,
     })
@@ -101,6 +111,7 @@ struct StatsData {
     veto_stats: VetoStatsView,
     level_breakdown: Vec<LevelCountView>,
     top_tools: Vec<TopToolView>,
+    demerits: Vec<DemeritToolView>,
     dead_weight: Vec<DeadToolView>,
     sources: Vec<SourceCountView>,
 }
@@ -200,6 +211,36 @@ fn load(conn: &Connection) -> anyhow::Result<StatsData> {
         })
         .collect();
 
+    // Phase 9 auto-tuner: top demerited tools — surfaces FP/bypass feedback
+    // that the recommender is using to demote skills for similar prompts.
+    let demerit_rows = scores::list_demerits(conn, 10)?;
+    let max_demerit = demerit_rows
+        .iter()
+        .map(|r| r.demerit_count)
+        .fold(0.0f64, f64::max)
+        .max(1e-9);
+    let demerits: Vec<DemeritToolView> = demerit_rows
+        .into_iter()
+        .map(|r| {
+            let parsed: Vec<quiver_storage::usage::DemeritSignature> = r
+                .demerit_signatures_json
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok())
+                .unwrap_or_default();
+            let top_sig = parsed
+                .first()
+                .map(|d| d.sig.clone())
+                .unwrap_or_else(|| "—".to_string());
+            DemeritToolView {
+                tool_id: r.tool_id,
+                demerit_str: format!("{:.2}", r.demerit_count),
+                bar_width_px: ((r.demerit_count / max_demerit) * 80.0).round() as i64,
+                top_sig,
+                sig_count: parsed.len(),
+            }
+        })
+        .collect();
+
     let cutoff = now - Duration::days(30);
     let mut dead_weight: Vec<DeadToolView> = tools::list_all(conn)?
         .into_iter()
@@ -242,6 +283,7 @@ fn load(conn: &Connection) -> anyhow::Result<StatsData> {
         veto_stats,
         level_breakdown,
         top_tools,
+        demerits,
         dead_weight,
         sources,
     })

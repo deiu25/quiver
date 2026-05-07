@@ -24,6 +24,7 @@ const M006: &str = include_str!("../migrations/006_agent_suggestions.sql");
 const M007: &str = include_str!("../migrations/007_mcp_npm_cache.sql");
 const M008: &str = include_str!("../migrations/008_mcp_npm_tombstone.sql");
 const M009: &str = include_str!("../migrations/009_suggestions_enforcement.sql");
+const M010: &str = include_str!("../migrations/010_auto_tuner.sql");
 
 fn migrations() -> anyhow::Result<Vec<Migration>> {
     Ok(vec![
@@ -39,6 +40,7 @@ fn migrations() -> anyhow::Result<Vec<Migration>> {
             .context("parse V8__mcp_npm_tombstone")?,
         Migration::unapplied("V9__suggestions_enforcement", M009)
             .context("parse V9__suggestions_enforcement")?,
+        Migration::unapplied("V10__auto_tuner", M010).context("parse V10__auto_tuner")?,
     ])
 }
 

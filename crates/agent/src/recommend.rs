@@ -11,7 +11,7 @@ use anyhow::Result;
 use quiver_recommender::{
     embed::Embedder,
     params::{COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query},
-    rerank::{Reranker, SuccessReranker},
+    rerank::{DemeritReranker, Reranker, SuccessReranker},
     search,
 };
 use quiver_storage::{embeddings, fts, tools};
@@ -56,6 +56,7 @@ pub fn top_k(conn: &Connection, embedder: &Embedder, task: &str, k: usize) -> Re
         FTS_WEIGHT,
     );
     SuccessReranker::default().apply(&mut hits, conn)?;
+    DemeritReranker::new(task).apply(&mut hits, conn)?;
     hits.truncate(k);
 
     let by_id: HashMap<String, _> = tools::list_all(conn)?

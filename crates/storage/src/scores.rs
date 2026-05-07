@@ -15,19 +15,35 @@ pub struct ScoreRow {
     pub avg_cost_usd: Option<f64>,
     pub median_duration_ms: Option<i64>,
     pub score_updated_at: Option<String>,
+    /// Sum of time-decayed FP+bypass weights for this tool. 0 when no
+    /// negative feedback has been recorded. Phase 9 auto-tuner.
+    #[serde(default)]
+    pub demerit_count: f64,
+    /// RFC3339 timestamp of the last `recompute_scores` pass that touched
+    /// the tool's demerit fields. Null until the first pass after the
+    /// migration runs.
+    #[serde(default)]
+    pub demerit_updated_at: Option<String>,
+    /// JSON `[{"sig":"…","weight":…}, …]` — top-N most-recent FP/bypass
+    /// signatures with decayed weights. Consumed by the per-task Jaccard
+    /// reranker. Null when there are no signatures.
+    #[serde(default)]
+    pub demerit_signatures_json: Option<String>,
 }
 
 pub fn list(conn: &Connection, tool_id: Option<&str>) -> anyhow::Result<Vec<ScoreRow>> {
     let (sql, params) = match tool_id {
         Some(id) => (
             "SELECT tool_id, success_rate, sample_size, avg_cost_usd,
-                    median_duration_ms, score_updated_at
+                    median_duration_ms, score_updated_at,
+                    demerit_count, demerit_updated_at, demerit_signatures_json
              FROM tool_scores WHERE tool_id = ?",
             vec![id.to_string()],
         ),
         None => (
             "SELECT tool_id, success_rate, sample_size, avg_cost_usd,
-                    median_duration_ms, score_updated_at
+                    median_duration_ms, score_updated_at,
+                    demerit_count, demerit_updated_at, demerit_signatures_json
              FROM tool_scores ORDER BY tool_id",
             vec![],
         ),
@@ -44,6 +60,87 @@ pub fn list(conn: &Connection, tool_id: Option<&str>) -> anyhow::Result<Vec<Scor
                 avg_cost_usd: row.get(3)?,
                 median_duration_ms: row.get(4)?,
                 score_updated_at: row.get(5)?,
+                demerit_count: row.get::<_, Option<f64>>(6)?.unwrap_or(0.0),
+                demerit_updated_at: row.get(7)?,
+                demerit_signatures_json: row.get(8)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// `(demerit_count, signatures)` payload returned per tool by [`demerits_for`].
+/// `signatures` is `(task_signature, decayed_weight)` sorted descending.
+pub type DemeritPayload = (f64, Vec<(String, f64)>);
+
+/// Per-tool demerit info ready for rerank. `signatures` is parsed from
+/// `demerit_signatures_json`. Tools without a `tool_scores` row, or with
+/// `demerit_count == 0`, are absent from the returned map. Phase 9
+/// auto-tuner.
+pub fn demerits_for(
+    conn: &Connection,
+    tool_ids: &[&str],
+) -> anyhow::Result<std::collections::HashMap<String, DemeritPayload>> {
+    use std::collections::HashMap;
+    if tool_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let placeholders = std::iter::repeat_n("?", tool_ids.len())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT tool_id, demerit_count, demerit_signatures_json
+         FROM tool_scores
+         WHERE tool_id IN ({placeholders}) AND demerit_count > 0"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let params: Vec<&dyn rusqlite::ToSql> =
+        tool_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+    let rows = stmt
+        .query_map(params.as_slice(), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<f64>>(1)?.unwrap_or(0.0),
+                row.get::<_, Option<String>>(2)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut out = HashMap::with_capacity(rows.len());
+    for (tool_id, count, json) in rows {
+        let sigs: Vec<(String, f64)> = json
+            .as_deref()
+            .and_then(|s| serde_json::from_str::<Vec<crate::usage::DemeritSignature>>(s).ok())
+            .map(|v| v.into_iter().map(|d| (d.sig, d.weight)).collect())
+            .unwrap_or_default();
+        out.insert(tool_id, (count, sigs));
+    }
+    Ok(out)
+}
+
+/// Tools with `demerit_count > 0`, sorted descending. Powers the
+/// `/stats` "Top demerited tools" panel and `quiver stats` text output.
+pub fn list_demerits(conn: &Connection, limit: i64) -> anyhow::Result<Vec<ScoreRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT tool_id, success_rate, sample_size, avg_cost_usd,
+                median_duration_ms, score_updated_at,
+                demerit_count, demerit_updated_at, demerit_signatures_json
+         FROM tool_scores
+         WHERE demerit_count > 0
+         ORDER BY demerit_count DESC
+         LIMIT ?",
+    )?;
+    let rows = stmt
+        .query_map([limit], |row| {
+            Ok(ScoreRow {
+                tool_id: row.get(0)?,
+                success_rate: row.get(1)?,
+                sample_size: row.get(2)?,
+                avg_cost_usd: row.get(3)?,
+                median_duration_ms: row.get(4)?,
+                score_updated_at: row.get(5)?,
+                demerit_count: row.get::<_, Option<f64>>(6)?.unwrap_or(0.0),
+                demerit_updated_at: row.get(7)?,
+                demerit_signatures_json: row.get(8)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;

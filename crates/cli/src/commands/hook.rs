@@ -31,7 +31,7 @@ use quiver_recommender::params::{
 };
 use quiver_recommender::policy::{Policy, Thresholds};
 use quiver_recommender::project;
-use quiver_recommender::rerank::{LanguageReranker, Reranker, SuccessReranker};
+use quiver_recommender::rerank::{DemeritReranker, LanguageReranker, Reranker, SuccessReranker};
 use quiver_recommender::search;
 use quiver_storage::{embeddings, fts, open, suggestions, tools};
 use rusqlite::Connection;
@@ -735,6 +735,7 @@ fn top_n(conn: &Connection, task: &str, k: usize) -> Result<Vec<search::Hit>> {
         FTS_WEIGHT,
     );
     SuccessReranker::default().apply(&mut hits, conn)?;
+    DemeritReranker::new(task).apply(&mut hits, conn)?;
     apply_language_filter(conn, &mut hits);
     hits.truncate(k);
     Ok(hits)

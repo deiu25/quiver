@@ -2794,10 +2794,12 @@ name = "quiver-recommender"
 version = "0.1.3"
 dependencies = [
  "anyhow",
+ "chrono",
  "fastembed",
  "quiver-core",
  "quiver-storage",
  "rusqlite",
+ "tempfile",
 ]
 
 [[package]]

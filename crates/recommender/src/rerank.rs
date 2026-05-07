@@ -5,11 +5,14 @@
 //! samples or without a `tool_scores` row are passed through unchanged, so
 //! Phase 1–3 behaviour is preserved when telemetry is empty.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use rusqlite::Connection;
 
+use crate::project::{Language, skill_language};
 use crate::search::Hit;
+use quiver_core::tool::ToolMeta;
+use quiver_storage::tools;
 
 /// Default boost factor — chosen so a tool with 100 % success rate gets a
 /// 1.3× score multiplier. PLAN §10 #5: track recommender accuracy on the
@@ -60,6 +63,82 @@ impl Reranker for SuccessReranker {
         });
         Ok(())
     }
+}
+
+/// Default flat penalty applied to a hit whose `skill_language` is foreign
+/// to the project. 0.30 is calibrated against the score-band ladder: it
+/// pushes a perfect 1.0 to 0.7 (Strong → not Mandatory), a 0.85 to 0.55
+/// (Hint), and a 0.70 to 0.40 (edge of Silent). Big enough to neutralise
+/// Mandatory, small enough to keep the result in the list as a hint.
+pub const LANGUAGE_PENALTY: f32 = 0.30;
+
+/// Reranker that demotes language-tagged skills which don't match any of
+/// the project's detected languages. Language-agnostic skills (`None` from
+/// [`skill_language`]) and skills matching at least one project language
+/// pass through unchanged. Empty `project_langs` means "language unknown"
+/// and the reranker becomes a no-op.
+#[derive(Debug, Clone)]
+pub struct LanguageReranker {
+    pub project_langs: HashSet<Language>,
+    pub penalty: f32,
+}
+
+impl LanguageReranker {
+    pub fn new(project_langs: HashSet<Language>, penalty: f32) -> Self {
+        Self {
+            project_langs,
+            penalty,
+        }
+    }
+
+    /// Read penalty override from `QUIVER_LANG_PENALTY` (default 0.30).
+    /// Negative values clamp to 0 (no-op), values above 1.0 also clamp to 1.0
+    /// — anything bigger than 1 would zero every foreign skill which is
+    /// rarely what an operator wants.
+    pub fn penalty_from_env() -> f32 {
+        let v = std::env::var("QUIVER_LANG_PENALTY")
+            .ok()
+            .and_then(|s| s.trim().parse::<f32>().ok())
+            .unwrap_or(LANGUAGE_PENALTY);
+        v.clamp(0.0, 1.0)
+    }
+}
+
+impl Reranker for LanguageReranker {
+    fn apply(&self, hits: &mut [Hit], conn: &Connection) -> anyhow::Result<()> {
+        if hits.is_empty() || self.project_langs.is_empty() || self.penalty <= 0.0 {
+            return Ok(());
+        }
+        let metas = load_metas(conn, hits)?;
+        for hit in hits.iter_mut() {
+            let Some(meta) = metas.get(&hit.tool_id) else {
+                continue;
+            };
+            let Some(lang) = skill_language(meta) else {
+                continue;
+            };
+            if self.project_langs.contains(&lang) {
+                continue;
+            }
+            hit.score = (hit.score - self.penalty).max(0.0);
+        }
+        hits.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        Ok(())
+    }
+}
+
+fn load_metas(conn: &Connection, hits: &[Hit]) -> anyhow::Result<HashMap<String, ToolMeta>> {
+    let mut out = HashMap::with_capacity(hits.len());
+    for h in hits {
+        if let Some(m) = tools::get(conn, &h.tool_id)? {
+            out.insert(h.tool_id.clone(), m);
+        }
+    }
+    Ok(out)
 }
 
 fn load_scores(conn: &Connection, hits: &[Hit]) -> anyhow::Result<HashMap<String, (f64, i64)>> {
@@ -199,5 +278,206 @@ mod tests {
         let mut hits: Vec<Hit> = Vec::new();
         SuccessReranker::default().apply(&mut hits, &conn).unwrap();
         assert!(hits.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod language_reranker_tests {
+    use super::*;
+    use chrono::Utc;
+    use quiver_core::tool::{ToolMeta, ToolType};
+    use quiver_storage::open;
+
+    fn open_with_tools_and_seed(metas: &[ToolMeta]) -> Connection {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("q.sqlite");
+        let conn = open(&path).unwrap();
+        // Keep tempdir alive by leaking — only inside this helper for tests.
+        std::mem::forget(dir);
+        for m in metas {
+            quiver_storage::tools::upsert(&conn, m).unwrap();
+        }
+        conn
+    }
+
+    fn make_meta(id: &str, name: &str, category: Option<&str>, triggers: &[&str]) -> ToolMeta {
+        ToolMeta {
+            id: id.to_string(),
+            r#type: ToolType::Skill,
+            name: name.to_string(),
+            source_repo: None,
+            install_path: None,
+            description: None,
+            long_description: None,
+            category: category.map(str::to_string),
+            triggers: triggers.iter().map(|s| s.to_string()).collect(),
+            examples: vec![],
+            invocation: None,
+            requires: vec![],
+            enabled: true,
+            added_at: Utc::now(),
+            last_seen_at: Utc::now(),
+            last_used_at: None,
+        }
+    }
+
+    #[test]
+    fn demotes_golang_skill_in_rust_project() {
+        let go_skill = make_meta("skill:golang-patterns", "golang-patterns", None, &[]);
+        let rust_skill = make_meta("skill:rust-patterns", "rust-patterns", None, &[]);
+        let conn = open_with_tools_and_seed(&[go_skill, rust_skill]);
+
+        let mut hits = vec![
+            Hit {
+                tool_id: "skill:golang-patterns".into(),
+                score: 0.85,
+            },
+            Hit {
+                tool_id: "skill:rust-patterns".into(),
+                score: 0.70,
+            },
+        ];
+        let mut langs = HashSet::new();
+        langs.insert(Language::Rust);
+        let rer = LanguageReranker::new(langs, LANGUAGE_PENALTY);
+        rer.apply(&mut hits, &conn).unwrap();
+
+        // golang demoted to 0.55, rust unchanged at 0.70 → rust now leads.
+        assert_eq!(hits[0].tool_id, "skill:rust-patterns");
+        assert!((hits[0].score - 0.70).abs() < 1e-6);
+        let go = hits
+            .iter()
+            .find(|h| h.tool_id == "skill:golang-patterns")
+            .unwrap();
+        assert!((go.score - 0.55).abs() < 1e-6);
+    }
+
+    #[test]
+    fn no_op_when_project_langs_empty() {
+        let go_skill = make_meta("skill:golang-patterns", "golang-patterns", None, &[]);
+        let conn = open_with_tools_and_seed(&[go_skill]);
+
+        let mut hits = vec![Hit {
+            tool_id: "skill:golang-patterns".into(),
+            score: 0.85,
+        }];
+        let rer = LanguageReranker::new(HashSet::new(), LANGUAGE_PENALTY);
+        rer.apply(&mut hits, &conn).unwrap();
+        assert!((hits[0].score - 0.85).abs() < 1e-6);
+    }
+
+    #[test]
+    fn no_op_for_language_agnostic_skill() {
+        let agnostic = make_meta("skill:git-workflow", "git-workflow", None, &[]);
+        let conn = open_with_tools_and_seed(&[agnostic]);
+
+        let mut hits = vec![Hit {
+            tool_id: "skill:git-workflow".into(),
+            score: 0.90,
+        }];
+        let mut langs = HashSet::new();
+        langs.insert(Language::Rust);
+        let rer = LanguageReranker::new(langs, LANGUAGE_PENALTY);
+        rer.apply(&mut hits, &conn).unwrap();
+        assert!((hits[0].score - 0.90).abs() < 1e-6);
+    }
+
+    #[test]
+    fn matching_language_passes_through() {
+        let rust_skill = make_meta("skill:rust-reviewer", "rust-reviewer", None, &[]);
+        let conn = open_with_tools_and_seed(&[rust_skill]);
+
+        let mut hits = vec![Hit {
+            tool_id: "skill:rust-reviewer".into(),
+            score: 0.92,
+        }];
+        let mut langs = HashSet::new();
+        langs.insert(Language::Rust);
+        let rer = LanguageReranker::new(langs, LANGUAGE_PENALTY);
+        rer.apply(&mut hits, &conn).unwrap();
+        assert!((hits[0].score - 0.92).abs() < 1e-6);
+    }
+
+    #[test]
+    fn clamps_score_at_zero() {
+        let go_skill = make_meta("skill:golang-tiny", "golang-tiny", None, &[]);
+        let conn = open_with_tools_and_seed(&[go_skill]);
+
+        let mut hits = vec![Hit {
+            tool_id: "skill:golang-tiny".into(),
+            score: 0.10,
+        }];
+        let mut langs = HashSet::new();
+        langs.insert(Language::Rust);
+        let rer = LanguageReranker::new(langs, LANGUAGE_PENALTY);
+        rer.apply(&mut hits, &conn).unwrap();
+        assert_eq!(hits[0].score, 0.0);
+    }
+
+    #[test]
+    fn polyglot_repo_keeps_both_languages() {
+        let go_skill = make_meta("skill:golang-patterns", "golang-patterns", None, &[]);
+        let rust_skill = make_meta("skill:rust-patterns", "rust-patterns", None, &[]);
+        let conn = open_with_tools_and_seed(&[go_skill, rust_skill]);
+
+        let mut hits = vec![
+            Hit {
+                tool_id: "skill:golang-patterns".into(),
+                score: 0.80,
+            },
+            Hit {
+                tool_id: "skill:rust-patterns".into(),
+                score: 0.80,
+            },
+        ];
+        let mut langs = HashSet::new();
+        langs.insert(Language::Rust);
+        langs.insert(Language::Go);
+        let rer = LanguageReranker::new(langs, LANGUAGE_PENALTY);
+        rer.apply(&mut hits, &conn).unwrap();
+
+        for h in &hits {
+            assert!((h.score - 0.80).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn penalty_zero_disables_reranker() {
+        let go_skill = make_meta("skill:golang-patterns", "golang-patterns", None, &[]);
+        let conn = open_with_tools_and_seed(&[go_skill]);
+
+        let mut hits = vec![Hit {
+            tool_id: "skill:golang-patterns".into(),
+            score: 0.85,
+        }];
+        let mut langs = HashSet::new();
+        langs.insert(Language::Rust);
+        let rer = LanguageReranker::new(langs, 0.0);
+        rer.apply(&mut hits, &conn).unwrap();
+        assert!((hits[0].score - 0.85).abs() < 1e-6);
+    }
+
+    #[test]
+    fn penalty_from_env_clamps() {
+        let key = "QUIVER_LANG_PENALTY";
+        let prev = std::env::var(key).ok();
+        unsafe {
+            std::env::set_var(key, "-5.0");
+        }
+        assert_eq!(LanguageReranker::penalty_from_env(), 0.0);
+        unsafe {
+            std::env::set_var(key, "10.0");
+        }
+        assert_eq!(LanguageReranker::penalty_from_env(), 1.0);
+        unsafe {
+            std::env::set_var(key, "0.5");
+        }
+        assert!((LanguageReranker::penalty_from_env() - 0.5).abs() < 1e-6);
+        unsafe {
+            match prev {
+                Some(v) => std::env::set_var(key, v),
+                None => std::env::remove_var(key),
+            }
+        }
     }
 }

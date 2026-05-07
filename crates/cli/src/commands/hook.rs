@@ -25,11 +25,13 @@ use chrono::Utc;
 use clap::Subcommand;
 use quiver_recommender::embed::Embedder;
 use quiver_recommender::excerpt::excerpt;
+use quiver_recommender::intent;
 use quiver_recommender::params::{
     COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
 };
 use quiver_recommender::policy::{Policy, Thresholds};
-use quiver_recommender::rerank::{Reranker, SuccessReranker};
+use quiver_recommender::project;
+use quiver_recommender::rerank::{LanguageReranker, Reranker, SuccessReranker};
 use quiver_recommender::search;
 use quiver_storage::{embeddings, fts, open, suggestions, tools};
 use rusqlite::Connection;
@@ -43,15 +45,97 @@ const DEFAULT_BODY_CHARS: usize = 3000;
 const PRE_TOOL_USE_K: usize = 3;
 /// Stop circuit-breaker only considers suggestions inside this window.
 const STOP_WINDOW_MINUTES: i64 = 60;
-/// Tool names that should never be vetoed (built-in built-on-by-Claude
-/// primitives where Quiver has no business interfering with the model's
-/// raw control flow).
+/// Tool names that should never be vetoed. Quiver routes between *skills,
+/// agents, plugins, MCP servers* — file IO and session-control primitives
+/// are not routing decisions, they are mechanical operations the model
+/// already chose. Vetoing them produces noise like "use skill:security-scan
+/// instead of Write" that makes Quiver itself unusable.
 const VETO_BLOCKLIST: &[&str] = &[
+    // session-control primitives
     "TodoWrite",
     "TodoRead",
     "ExitPlanMode",
     "EnterPlanMode",
     "AskUserQuestion",
+    "ToolSearch",
+    "ScheduleWakeup",
+    "EnterWorktree",
+    "ExitWorktree",
+    // file primitives — Quiver catalogues skills/agents/MCP, not file IO
+    "Read",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "NotebookEdit",
+    "Glob",
+    "Grep",
+    "LS",
+];
+
+/// Bash command prefixes treated as trivial (read-only / build / test).
+/// Vetoing these never gives a useful tool routing decision — they are
+/// concrete shell verbs, not skill candidates. Match is "starts with this
+/// prefix followed by a word boundary, or equals the trimmed prefix".
+const TRIVIAL_BASH_PREFIXES: &[&str] = &[
+    // file/dir read
+    "ls",
+    "find",
+    "cat",
+    "head",
+    "tail",
+    "wc",
+    "file",
+    "grep",
+    "rg",
+    "ag",
+    "fd",
+    "tree",
+    "stat",
+    "pwd",
+    "which",
+    "whoami",
+    "echo",
+    "printf",
+    "env",
+    "date",
+    "true",
+    "false",
+    "test",
+    "[",
+    // git read-only
+    "git status",
+    "git diff",
+    "git log",
+    "git show",
+    "git branch",
+    "git remote",
+    "git rev-parse",
+    "git config --get",
+    "git blame",
+    "git ls-files",
+    "git rev-list",
+    "git describe",
+    "git reflog",
+    // build / type-check / test (not skill candidates)
+    "cargo check",
+    "cargo build",
+    "cargo test",
+    "cargo fmt",
+    "cargo clippy",
+    "cargo metadata",
+    "cargo tree",
+    "cargo run",
+    "cargo doc",
+    "go build",
+    "go test",
+    "go vet",
+    "go fmt",
+    "npm test",
+    "npm run",
+    "pnpm test",
+    "pnpm run",
+    "yarn test",
+    "tsc",
 ];
 
 /// Enforcement mode read from `QUIVER_ENFORCE`. Default: `strict`.
@@ -239,7 +323,12 @@ fn user_prompt_submit(event: serde_json::Value) -> Result<()> {
         return Ok(());
     };
     let thresholds = Thresholds::from_env();
-    let policy = thresholds.classify(top.score);
+    let mut policy = thresholds.classify(top.score);
+    // Intent filter: question/analysis prompts must not pressure tool
+    // invocation. Runs after the score-band classifier so the policy
+    // ladder stays score-only and this gate is independently testable.
+    let detected_intent = intent::classify_intent(prompt);
+    policy = intent::apply_downgrade(policy, detected_intent);
     if policy == Policy::Silent {
         return Ok(());
     }
@@ -362,6 +451,7 @@ fn pre_tool_use(event: serde_json::Value) -> Result<()> {
         && competing
         && delta >= thresholds.tau_delta
         && !VETO_BLOCKLIST.contains(&tool)
+        && !(tool == "Bash" && trivial_bypass_enabled() && is_trivial_bash(&event))
         && !session_id.is_empty()
         && !signature.is_empty()
     {
@@ -645,8 +735,98 @@ fn top_n(conn: &Connection, task: &str, k: usize) -> Result<Vec<search::Hit>> {
         FTS_WEIGHT,
     );
     SuccessReranker::default().apply(&mut hits, conn)?;
+    apply_language_filter(conn, &mut hits);
     hits.truncate(k);
     Ok(hits)
+}
+
+/// Apply [`LanguageReranker`] when project language can be detected from the
+/// cwd. Failure to detect (no marker files, no read permission, …) leaves
+/// hits untouched — never block a recommendation on filesystem state.
+fn apply_language_filter(conn: &Connection, hits: &mut [search::Hit]) {
+    let cwd = match std::env::current_dir() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let langs = project::detect_project_languages(&cwd);
+    if langs.is_empty() {
+        return;
+    }
+    let penalty = LanguageReranker::penalty_from_env();
+    if penalty <= 0.0 {
+        return;
+    }
+    let rer = LanguageReranker::new(langs, penalty);
+    let _ = rer.apply(hits, conn);
+}
+
+fn trivial_bypass_enabled() -> bool {
+    !matches!(
+        std::env::var("QUIVER_TRIVIAL_BYPASS")
+            .ok()
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str(),
+        "off" | "0" | "no" | "disabled",
+    )
+}
+
+/// Returns true when the Bash command is a recognised read-only / build /
+/// test verb that has no business being routed to a skill. Strips leading
+/// `FOO=bar` env assignments so `RUST_LOG=debug cargo test` still matches.
+pub(crate) fn is_trivial_bash(event: &serde_json::Value) -> bool {
+    let cmd = event
+        .get("tool_input")
+        .and_then(|v| v.get("command"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim_start();
+    let cmd = strip_leading_env_assignments(cmd);
+    if cmd.is_empty() {
+        return false;
+    }
+    TRIVIAL_BASH_PREFIXES
+        .iter()
+        .any(|p| matches_command_prefix(cmd, p))
+}
+
+fn matches_command_prefix(cmd: &str, prefix: &str) -> bool {
+    if !cmd.starts_with(prefix) {
+        return false;
+    }
+    match cmd.as_bytes().get(prefix.len()) {
+        // exact match (`ls`, `pwd`)
+        None => true,
+        // followed by word boundary (space, tab, pipe, redirect, etc.)
+        Some(&b) => !(b.is_ascii_alphanumeric() || b == b'_' || b == b'-'),
+    }
+}
+
+fn strip_leading_env_assignments(s: &str) -> &str {
+    let mut rest = s.trim_start();
+    loop {
+        let head: &str = rest.split_whitespace().next().unwrap_or("");
+        if head.is_empty() || !is_env_assignment(head) {
+            return rest;
+        }
+        rest = &rest[head.len()..];
+        rest = rest.trim_start();
+    }
+}
+
+fn is_env_assignment(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    let Some(eq_pos) = bytes.iter().position(|&b| b == b'=') else {
+        return false;
+    };
+    if eq_pos == 0 {
+        return false;
+    }
+    bytes[..eq_pos]
+        .iter()
+        .all(|&b| b == b'_' || b.is_ascii_uppercase() || b.is_ascii_digit())
 }
 
 fn format_user_prompt_block(top: &TopHit, body: Option<&str>) -> String {
@@ -810,5 +990,118 @@ mod tests {
         let s = summarise_task("hello \"world\"\nnext line");
         assert!(!s.contains('"'));
         assert!(!s.contains('\n'));
+    }
+
+    fn bash_event(cmd: &str) -> serde_json::Value {
+        serde_json::json!({"tool_input": {"command": cmd}})
+    }
+
+    #[test]
+    fn is_trivial_bash_ls() {
+        assert!(is_trivial_bash(&bash_event("ls -la")));
+        assert!(is_trivial_bash(&bash_event("ls")));
+    }
+
+    #[test]
+    fn is_trivial_bash_grep_with_args() {
+        assert!(is_trivial_bash(&bash_event("grep -RIn 'foo' src/")));
+    }
+
+    #[test]
+    fn is_trivial_bash_git_status() {
+        assert!(is_trivial_bash(&bash_event("git status")));
+        assert!(is_trivial_bash(&bash_event("git status --short")));
+    }
+
+    #[test]
+    fn is_trivial_bash_cargo_check() {
+        assert!(is_trivial_bash(&bash_event("cargo check -p quiver-cli")));
+    }
+
+    #[test]
+    fn is_trivial_bash_cargo_test() {
+        assert!(is_trivial_bash(&bash_event("cargo test --workspace")));
+    }
+
+    #[test]
+    fn is_trivial_bash_handles_env_prefix() {
+        assert!(is_trivial_bash(&bash_event("RUST_LOG=debug cargo test")));
+        assert!(is_trivial_bash(&bash_event("FOO=bar BAZ=qux ls -la")));
+    }
+
+    #[test]
+    fn is_trivial_bash_rejects_rm() {
+        assert!(!is_trivial_bash(&bash_event("rm -rf target/")));
+    }
+
+    #[test]
+    fn is_trivial_bash_rejects_npm_install() {
+        // npm install is NOT in the allowlist — only npm test / npm run.
+        assert!(!is_trivial_bash(&bash_event("npm install lodash")));
+    }
+
+    #[test]
+    fn is_trivial_bash_rejects_curl() {
+        assert!(!is_trivial_bash(&bash_event("curl https://example.com")));
+    }
+
+    #[test]
+    fn is_trivial_bash_word_boundary_blocks_substring_match() {
+        // `lsof` starts with `ls` but is a different command.
+        assert!(!is_trivial_bash(&bash_event("lsof -i :8080")));
+        // `cargo-foo` should not match `cargo check`.
+        assert!(!is_trivial_bash(&bash_event("cargo-foo bar")));
+    }
+
+    #[test]
+    fn is_trivial_bash_empty_returns_false() {
+        assert!(!is_trivial_bash(&bash_event("")));
+        assert!(!is_trivial_bash(&bash_event("   ")));
+    }
+
+    #[test]
+    fn veto_blocklist_contains_file_primitives() {
+        for t in &["Read", "Write", "Edit", "Glob", "Grep", "LS", "ToolSearch"] {
+            assert!(VETO_BLOCKLIST.contains(t), "missing {t}");
+        }
+    }
+
+    #[test]
+    fn veto_blocklist_keeps_routable_tools_out() {
+        for t in &["Skill", "Agent", "Task", "WebFetch", "WebSearch", "Bash"] {
+            assert!(!VETO_BLOCKLIST.contains(t), "should be routable: {t}");
+        }
+    }
+
+    #[test]
+    fn strip_leading_env_assignments_handles_zero_or_more() {
+        assert_eq!(strip_leading_env_assignments("ls -la"), "ls -la");
+        assert_eq!(strip_leading_env_assignments("FOO=1 ls"), "ls");
+        assert_eq!(
+            strip_leading_env_assignments("A=1 B=2 C=3 cargo build"),
+            "cargo build"
+        );
+        // Lower-case "key" with `=` is not an env-assignment heuristic.
+        assert_eq!(strip_leading_env_assignments("foo=1 bar"), "foo=1 bar");
+    }
+
+    #[test]
+    fn directive_suppressed_on_question_prompt() {
+        // Cross-module sanity: confirm wiring from intent → policy survives
+        // the score-band → downgrade pipeline used inside `user_prompt_submit`.
+        let pol = Thresholds::default().classify(0.85);
+        assert_eq!(pol, Policy::Mandatory);
+        let intent = quiver_recommender::intent::classify_intent("ce face top_match?");
+        let downgraded = quiver_recommender::intent::apply_downgrade(pol, intent);
+        assert_eq!(downgraded, Policy::Silent);
+    }
+
+    #[test]
+    fn directive_kept_on_operational_prompt() {
+        let pol = Thresholds::default().classify(0.85);
+        let intent =
+            quiver_recommender::intent::classify_intent("implement intent filter in hook.rs");
+        let downgraded = quiver_recommender::intent::apply_downgrade(pol, intent);
+        assert_eq!(downgraded, Policy::Mandatory);
     }
 }

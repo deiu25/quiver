@@ -12,3 +12,7 @@ quiver-storage = { path = "../storage", version = "0.1.3" }
 anyhow          = { workspace = true }
 fastembed       = { workspace = true }
 rusqlite        = { workspace = true }
+
+[dev-dependencies]
+chrono   = { workspace = true }
+tempfile = { workspace = true }

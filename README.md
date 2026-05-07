@@ -92,13 +92,40 @@ If you built from a clone, `git pull && cargo install --path crates/cli --force`
 
 ```bash
 cargo install quiver-cli                                 # install
-quiver init                                              # wire everything (one time)
+quiver init --enforce strict                             # wire everything in active-trigger mode
 # restart Claude Code
 ```
 
-`quiver init` does it all in one step: syncs the catalog if empty, wires the `UserPromptSubmit` + `PreToolUse` hooks into `~/.claude/settings.json`, registers the Quiver MCP server in `~/.claude.json`, writes the `quiver-pilot` primer SKILL.md, spawns `quiver agent` detached (PID at `~/.cache/quiver/agent.pid`, logs at `~/.cache/quiver/agent.log`), and spawns `quiver serve` on `http://127.0.0.1:7777` (PID at `~/.cache/quiver/web.pid`, logs at `~/.cache/quiver/web.log`). After the next Claude Code session starts, every prompt is enriched with a top-1 skill recommendation (body excerpt included) — the model sees the skill as inline context and follows it. The web UI gives you `/catalog`, `/recommend`, `/suggestions`, and `/stats` in the browser. No invocation, no install, no setup.
+`quiver init` does it all in one step: syncs the catalog if empty, wires the `UserPromptSubmit` + `PreToolUse` (matcher `*`) + `Stop` hooks into `~/.claude/settings.json`, writes `env.QUIVER_ENFORCE` so child sessions inherit the mode, registers the Quiver MCP server in `~/.claude.json`, writes the `quiver-pilot` primer SKILL.md, spawns `quiver agent` detached (PID at `~/.cache/quiver/agent.pid`, logs at `~/.cache/quiver/agent.log`), and spawns `quiver serve` on `http://127.0.0.1:7777` (PID at `~/.cache/quiver/web.pid`, logs at `~/.cache/quiver/web.log`). After the next Claude Code session starts, every prompt is enriched with a top-1 skill recommendation; in `strict` mode (the default) Quiver also emits a `<quiver-directive>` system-reminder for high-confidence matches, vetoes wrong tool calls via `permissionDecision: deny`, and nudges via the Stop hook if a mandatory recommendation went unused. The web UI gives you `/catalog`, `/recommend`, `/suggestions`, and `/stats` in the browser.
 
-Opt out of any step: `quiver init --no-sync --no-meta-skill --no-mcp --no-start-agent --no-start-web`. Override the web port with `--web-port 8080`. Each step is idempotent — re-run `quiver init` any time without duplicating entries.
+Pick the level you want:
+
+```bash
+quiver init --enforce strict     # default: directives + vetoes + Stop nudges (full active-trigger mode)
+quiver init --enforce advisory   # directives only — keeps system-reminders, drops vetoes and Stop blocks
+quiver init --enforce off        # hooks short-circuit; no enrichment, no veto, no nudge
+```
+
+Opt out of any step: `quiver init --no-sync --no-meta-skill --no-mcp --no-start-agent --no-start-web`. Override the web port with `--web-port 8080`. Each step is idempotent — re-run `quiver init` any time without duplicating entries (legacy `Skill|Agent|Task` PreToolUse matcher is upgraded in place to `*`).
+
+### Stop the daemons
+
+`quiver init` writes PID files at `~/.cache/quiver/{agent,web}.pid`. Kill them by PID:
+
+```bash
+kill $(cat ~/.cache/quiver/agent.pid) 2>/dev/null    # stop background agent
+kill $(cat ~/.cache/quiver/web.pid)   2>/dev/null    # stop web UI
+rm -f ~/.cache/quiver/agent.pid ~/.cache/quiver/web.pid    # clean stale PID files
+```
+
+Or use `pkill`:
+
+```bash
+pkill -f "quiver agent"
+pkill -f "quiver serve"
+```
+
+Re-running `quiver init` detects live processes via `kill(0)` on the PID file and reuses them — no double-spawn. Pass `--no-start-agent --no-start-web` if you'd rather supervise them yourself (tmux, systemd).
 
 ```bash
 quiver recommend "extract design tokens"                 # top-3 hybrid search
@@ -194,11 +221,12 @@ Outcome heuristic per `tool_use` event: `success` (clean `tool_result`), `failur
 
 | Command | Purpose |
 |---|---|
-| `quiver init [--scope user\|project] [--no-meta-skill] [--no-sync] [--no-mcp] [--no-start-agent] [--no-start-web] [--web-port N] [--dry-run]` | Single-command bootstrap. Syncs the catalog if empty, merges hook entries into `~/.claude/settings.json`, registers the MCP server in `~/.claude.json` (top-level for `--scope user`, per-project for `--scope project`), writes the primer SKILL.md, and spawns both `quiver agent` (PID at `~/.cache/quiver/agent.pid`) and `quiver serve` (PID at `~/.cache/quiver/web.pid`, default port 7777) detached. Each step idempotent — agent + web reuse detected via `kill(0)` on PID file. Backup at `<file>.json.quiver-init.bak`. |
-| `quiver hook user-prompt-submit` | Reads a Claude Code `UserPromptSubmit` event from stdin, runs the recommender, and emits `additionalContext` containing the top-1 skill **body excerpt** when score ≥ `QUIVER_HOOK_SCORE_MIN` (default 0.4). Wired by `init`; rarely invoked by hand. |
-| `quiver hook pre-tool-use` | Same shape but for `Skill` / `Agent` / `Task` tool calls — emits the top-3 metadata (no body) so the model can pivot if it picked something Quiver thinks is a worse match. Replaces the legacy bash wrapper. |
+| `quiver init [--enforce strict\|advisory\|off] [--scope user\|project] [--no-meta-skill] [--no-sync] [--no-mcp] [--no-start-agent] [--no-start-web] [--web-port N] [--dry-run]` | Single-command bootstrap. Syncs the catalog if empty, merges `UserPromptSubmit` + `PreToolUse` (matcher `*`) + `Stop` hook entries into `~/.claude/settings.json`, writes `env.QUIVER_ENFORCE = <mode>` so child sessions inherit the mode, registers the MCP server in `~/.claude.json` (top-level for `--scope user`, per-project for `--scope project`), writes the primer SKILL.md, and spawns both `quiver agent` (PID at `~/.cache/quiver/agent.pid`) and `quiver serve` (PID at `~/.cache/quiver/web.pid`, default port 7777) detached. Default `--enforce strict`. Each step idempotent — legacy `Skill\|Agent\|Task` matcher gets upgraded in place to `*`, agent + web reuse detected via `kill(0)` on PID file. Backup at `<file>.json.quiver-init.bak`. |
+| `quiver hook user-prompt-submit` | Reads a Claude Code `UserPromptSubmit` event from stdin, runs the recommender, and emits `additionalContext` with the top-1 skill **body excerpt** when score ≥ `QUIVER_TAU_HINT` (default 0.40). In `strict` mode also emits a `<quiver-directive>` `systemMessage` for `Strong` (≥ 0.60) / `Mandatory` (≥ 0.75) bands. Wired by `init`; rarely invoked by hand. |
+| `quiver hook pre-tool-use` | Matches every tool call (matcher `*`). In `strict` mode emits `permissionDecision: deny` when an installed tool scores higher than the candidate by `≥ QUIVER_TAU_DELTA` (default 0.20) — single-veto-per-tuple lets the model retry the same denied call once and pass through. In `advisory` / out-of-strict-band cases emits top-3 metadata `additionalContext`. |
+| `quiver hook stop` | Strict-mode circuit-breaker. Walks pending `Mandatory` suggestions in the last 60 min and emits `decision: block` once per row (`nudged=1` flag prevents loops) when a mandatory recommendation finished the session unused. |
 
-Per-shell override: `export QUIVER_HOOK_DISABLED=1` short-circuits both hooks. Tune behaviour with `QUIVER_HOOK_SCORE_MIN` (float, e.g. `0.5`) and `QUIVER_HOOK_BODY_CHARS` (integer, default `3000`).
+Per-shell override: `export QUIVER_HOOK_DISABLED=1` short-circuits every hook. `QUIVER_ENFORCE=advisory` keeps system-reminders, drops vetoes and Stop blocks. `QUIVER_ENFORCE=off` ≡ `QUIVER_HOOK_DISABLED=1`. Tune thresholds with `QUIVER_TAU_HINT` / `QUIVER_TAU_STRONG` / `QUIVER_TAU_MANDATORY` / `QUIVER_TAU_DELTA` (floats; legacy `QUIVER_HOOK_SCORE_MIN` is honoured as `QUIVER_TAU_HINT`). Body excerpt size: `QUIVER_HOOK_BODY_CHARS` (integer, default `3000`).
 
 ### Local web UI
 

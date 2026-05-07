@@ -1,0 +1,21 @@
+{
+  "name": "test-plugin",
+  "version": "1.0.0",
+  "description": "Multi-agent orchestration system for Claude Code",
+  "author": {
+    "name": "test-plugin contributors"
+  },
+  "repository": "git+https://github.com/example/test-plugin.git",
+  "homepage": "https://github.com/example/test-plugin",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "multi-agent",
+    "orchestration",
+    "automation",
+    "testing"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

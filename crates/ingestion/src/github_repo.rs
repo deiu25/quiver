@@ -218,7 +218,7 @@ fn ingest_plugin_marketplace(root: &Path, source_url: &str) -> anyhow::Result<Ve
     // single doc-style row in that case.
     let market = root.join("marketplace.json");
     if market.is_file()
-        && let Ok(metas) = plugin_json::parse_installed_plugins(&market)
+        && let Ok(metas) = plugin_json::parse_installed_plugins(&market, None)
         && !metas.is_empty()
     {
         return Ok(metas

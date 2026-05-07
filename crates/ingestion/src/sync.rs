@@ -73,8 +73,14 @@ pub fn discover_all(home: &Path) -> DiscoverReport {
 
     // 2) Plugins
     let plugin_path = home.join(".claude/plugins/installed_plugins.json");
+    let plugin_cache_root = home.join(".claude/plugins/cache");
+    let cache_root = if plugin_cache_root.is_dir() {
+        Some(plugin_cache_root.as_path())
+    } else {
+        None
+    };
     if plugin_path.exists() {
-        match plugin_json::parse_installed_plugins(&plugin_path) {
+        match plugin_json::parse_installed_plugins(&plugin_path, cache_root) {
             Ok(parsed) => {
                 for meta in parsed {
                     if seen_ids.insert(meta.id.clone()) {

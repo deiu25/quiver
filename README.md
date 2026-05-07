@@ -27,13 +27,13 @@ No telemetry. No cloud. No API keys. The embedding model runs on CPU and weighs 
 ## Features
 
 - **Hybrid search** — 0.6 × cosine (sqlite-vec) + 0.4 × BM25 (FTS5), reranked by per-tool success rate from your real usage.
-- **Catalogs everything** — standalone `SKILL.md` files, plugin marketplaces, MCP servers, and CLIs cloned from GitHub.
+- **Catalogs everything** — standalone `SKILL.md` files, plugin marketplaces (with real descriptions, keywords, and README excerpts pulled from each plugin's cache manifest), MCP servers, and CLIs cloned from GitHub.
 - **Mid-session integration** — stdio MCP server (`rmcp` 1.6) exposes 5 tools to Claude Code while you work.
 - **Self-improving** — replays session JSONL into `usage_events`, scores tools by outcome, boosts hits that worked.
 - **Background agent** — tails `~/.claude/projects/*.jsonl`, drops a hint markdown per session, tracks which suggestions you actually invoke.
 - **GitHub onboarding** — `quiver add <url>` clones any tool repo, auto-detects its kind, and ingests its tools.
 - **Interactive TUI** — `ratatui` dashboard with search, type filter, and `$EDITOR` jump.
-- **Local web UI** — `quiver serve` opens a loopback dashboard with catalog browser, debounced recommend box, live SSE suggestions feed, and stats. Same single binary; htmx + askama, no Node, no build step.
+- **Local web UI** — `quiver serve` opens a loopback dashboard with type-filter chips on `/catalog` (live counts per type), debounced recommend box, live SSE suggestions feed with manual Accept buttons, and stats. Same single binary; htmx + askama, no Node, no build step.
 
 ---
 
@@ -204,7 +204,7 @@ Per-shell override: `export QUIVER_HOOK_DISABLED=1` short-circuits both hooks. T
 
 | Command | Purpose |
 |---|---|
-| `quiver serve [--port 7777] [--host 127.0.0.1] [--open]` | Loopback-only `axum` server. Five pages: `/catalog` (filter/search/detail), `/recommend` (debounced top-3), `/suggestions` (live SSE feed of agent suggestions, in-place acceptance flips), `/stats` (acceptance %, top tools, dead weight, sources), `/sources` (one-click rescan). Reads the same SQLite DB the CLI uses; embedder loads lazily on a blocking thread, so first `/api/recommend` call blocks ~3-5 s while the model warms. Run alongside `quiver agent` in a separate pane to watch live suggestions. |
+| `quiver serve [--port 7777] [--host 127.0.0.1] [--open]` | Loopback-only `axum` server. Five pages: `/catalog` (type-filter chips with live counts, search, detail, type-aware empty states), `/recommend` (debounced top-3), `/suggestions` (live SSE feed of agent suggestions with manual Accept buttons, in-place acceptance flips), `/stats` (acceptance %, top tools, dead weight, sources), `/sources` (one-click rescan). Reads the same SQLite DB the CLI uses; embedder loads lazily on a blocking thread, so first `/api/recommend` call blocks ~3-5 s while the model warms. Run alongside `quiver agent` in a separate pane to watch live suggestions. |
 
 ---
 

@@ -292,8 +292,28 @@ mod tests {
         .unwrap();
         usage::recompute_scores(&mut conn).unwrap();
 
-        suggestions::record(&conn, "s1", "skill:caveman", None, Some(0.9), recent).unwrap();
-        suggestions::record(&conn, "s1", "skill:designlang", None, Some(0.7), recent).unwrap();
+        suggestions::record(
+            &conn,
+            "s1",
+            "skill:caveman",
+            None,
+            Some(0.9),
+            recent,
+            None,
+            None,
+        )
+        .unwrap();
+        suggestions::record(
+            &conn,
+            "s1",
+            "skill:designlang",
+            None,
+            Some(0.7),
+            recent,
+            None,
+            None,
+        )
+        .unwrap();
         suggestions::mark_accepted(&conn, "s1", "skill:caveman", recent, 60).unwrap();
 
         let body = digest(&path, 7, None).unwrap();

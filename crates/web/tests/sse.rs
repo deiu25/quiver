@@ -85,6 +85,8 @@ async fn sse_emits_event_for_inserted_suggestion() {
             Some("be terse"),
             Some(0.91),
             Utc::now(),
+            None,
+            None,
         )
         .unwrap();
     }

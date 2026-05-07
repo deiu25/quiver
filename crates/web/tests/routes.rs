@@ -212,6 +212,8 @@ async fn suggestions_page_includes_initial_rows() {
             Some("compress this"),
             Some(0.82),
             Utc::now(),
+            None,
+            None,
         )
         .unwrap();
     }
@@ -239,6 +241,8 @@ async fn accept_suggestion_flips_pending_row() {
             Some("compress this"),
             Some(0.82),
             Utc::now(),
+            None,
+            None,
         )
         .unwrap()
     };
@@ -274,7 +278,17 @@ async fn accept_suggestion_idempotent_returns_accepted_fragment() {
     )]);
     let id = {
         let conn = state.pool.get().unwrap();
-        suggestions::record(&conn, "s", "skill:caveman", None, None, Utc::now()).unwrap()
+        suggestions::record(
+            &conn,
+            "s",
+            "skill:caveman",
+            None,
+            None,
+            Utc::now(),
+            None,
+            None,
+        )
+        .unwrap()
     };
     // First accept: flips row.
     let (s1, _) = post(state.clone(), &format!("/api/suggestions/{id}/accept")).await;

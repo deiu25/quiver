@@ -73,6 +73,15 @@ pub struct InitArgs {
     /// Port to bind the web UI on (default 7777). Loopback only.
     #[arg(long, default_value_t = DEFAULT_WEB_PORT)]
     pub web_port: u16,
+    /// Enforcement mode written into `settings.json.env.QUIVER_ENFORCE`.
+    /// `strict` (default): UserPromptSubmit emits `<quiver-directive>`
+    /// system-reminders for Strong/Mandatory bands, PreToolUse vetoes
+    /// competing tool calls (`permissionDecision: deny`), Stop hook nudges
+    /// pending mandatory recommendations. `advisory`: keeps the directive
+    /// system-reminders, drops vetoes and Stop blocks. `off`: hooks
+    /// short-circuit and do nothing.
+    #[arg(long, default_value = "strict")]
+    pub enforce: EnforceMode,
     /// Print the proposed changes and exit without writing anything.
     #[arg(long)]
     pub dry_run: bool,
@@ -82,6 +91,23 @@ pub struct InitArgs {
 pub enum Scope {
     User,
     Project,
+}
+
+#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnforceMode {
+    Strict,
+    Advisory,
+    Off,
+}
+
+impl EnforceMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            EnforceMode::Strict => "strict",
+            EnforceMode::Advisory => "advisory",
+            EnforceMode::Off => "off",
+        }
+    }
 }
 
 pub async fn run(args: InitArgs) -> Result<()> {
@@ -130,6 +156,7 @@ struct Plan {
     web_pid_path: PathBuf,
     web_log_path: PathBuf,
     web_port: u16,
+    enforce: EnforceMode,
     quiver_bin: String,
 }
 
@@ -164,6 +191,7 @@ fn build_plan(args: &InitArgs) -> Result<Plan> {
         web_pid_path,
         web_log_path,
         web_port: args.web_port,
+        enforce: args.enforce,
         quiver_bin,
     })
 }
@@ -192,6 +220,7 @@ fn print_plan(plan: &Plan, dry: bool) {
         plan.web_port
     );
     eprintln!("[{prefix}] web log:     {}", plan.web_log_path.display());
+    eprintln!("[{prefix}] enforce:     {}", plan.enforce.as_str());
     eprintln!("[{prefix}] quiver binary: {}", plan.quiver_bin);
 }
 
@@ -289,9 +318,10 @@ fn apply_settings(plan: &Plan) -> Result<()> {
     let mut current = read_settings_json(&plan.settings_path)?;
     backup_settings(&plan.settings_path)?;
 
-    let merged = merge_quiver_hooks(current.clone(), &plan.quiver_bin);
+    let with_hooks = merge_quiver_hooks(current.clone(), &plan.quiver_bin);
+    let merged = merge_quiver_env(with_hooks, plan.enforce);
     if merged == current {
-        eprintln!("[INIT] settings.json already has Quiver hooks — no change");
+        eprintln!("[INIT] settings.json already has Quiver hooks + enforce env — no change");
         return Ok(());
     }
     current = merged;
@@ -339,9 +369,12 @@ fn write_settings_atomic(path: &Path, value: &Value) -> Result<()> {
     Ok(())
 }
 
-/// Add (or update) the Quiver `UserPromptSubmit` and `PreToolUse` hook
-/// entries inside `settings.hooks`. Idempotent — entries are matched by the
-/// substring `quiver hook` in `command`.
+/// Add (or upgrade) the Quiver `UserPromptSubmit`, `PreToolUse`, and `Stop`
+/// hook entries inside `settings.hooks`. Idempotent — existing Quiver
+/// entries (matched by the `quiver hook` substring) are upgraded in place
+/// when `matcher`/`command` differ, so re-running `quiver init` after an
+/// upgrade rewires the matcher (e.g. `Skill|Agent|Task` → `*`) without
+/// duplicating entries.
 pub(crate) fn merge_quiver_hooks(mut settings: Value, quiver_bin: &str) -> Value {
     let hooks = settings
         .as_object_mut()
@@ -362,8 +395,28 @@ pub(crate) fn merge_quiver_hooks(mut settings: Value, quiver_bin: &str) -> Value
     upsert_hook_entry(
         hooks_obj,
         "PreToolUse",
-        Some("Skill|Agent|Task"),
+        Some("*"),
         &format!("{quiver_bin} hook pre-tool-use"),
+    );
+    upsert_hook_entry(hooks_obj, "Stop", None, &format!("{quiver_bin} hook stop"));
+    settings
+}
+
+/// Merge `env.QUIVER_ENFORCE = <mode>` into `settings`. Other env entries are
+/// preserved; existing `QUIVER_ENFORCE` is overwritten so re-running `quiver
+/// init --enforce <new>` rotates the mode in place.
+pub(crate) fn merge_quiver_env(mut settings: Value, enforce: EnforceMode) -> Value {
+    let obj = match settings.as_object_mut() {
+        Some(o) => o,
+        None => return settings,
+    };
+    let env = obj.entry("env").or_insert_with(|| json!({}));
+    let Some(env_obj) = env.as_object_mut() else {
+        return settings;
+    };
+    env_obj.insert(
+        "QUIVER_ENFORCE".to_string(),
+        Value::String(enforce.as_str().to_string()),
     );
     settings
 }
@@ -381,16 +434,51 @@ fn upsert_hook_entry(
         return;
     };
 
-    // Idempotent: an entry whose nested command contains "quiver hook" wins.
-    for entry in arr.iter() {
-        if let Some(nested) = entry.get("hooks").and_then(|h| h.as_array())
-            && nested.iter().any(|h| {
-                h.get("command")
-                    .and_then(|c| c.as_str())
-                    .map(|s| s.contains("quiver hook"))
-                    .unwrap_or(false)
+    // Find any existing Quiver entry — upgrade it in place rather than
+    // appending a duplicate. We match by "quiver hook" substring on the
+    // nested command, so user customisation that prefixes/wraps the binary
+    // (e.g. `env FOO=bar quiver hook ...`) is still recognised.
+    for entry in arr.iter_mut() {
+        let is_quiver = entry
+            .get("hooks")
+            .and_then(|h| h.as_array())
+            .map(|nested| {
+                nested.iter().any(|h| {
+                    h.get("command")
+                        .and_then(|c| c.as_str())
+                        .map(|s| s.contains("quiver hook"))
+                        .unwrap_or(false)
+                })
             })
-        {
+            .unwrap_or(false);
+        if is_quiver {
+            // Upgrade matcher.
+            let entry_obj = match entry.as_object_mut() {
+                Some(o) => o,
+                None => return,
+            };
+            match matcher {
+                Some(m) => {
+                    entry_obj.insert("matcher".into(), Value::String(m.into()));
+                },
+                None => {
+                    entry_obj.remove("matcher");
+                },
+            }
+            // Upgrade command on every nested handler that already speaks
+            // `quiver hook` — leave non-Quiver siblings alone.
+            if let Some(nested) = entry_obj.get_mut("hooks").and_then(|h| h.as_array_mut()) {
+                for h in nested.iter_mut() {
+                    if let Some(o) = h.as_object_mut()
+                        && o.get("command")
+                            .and_then(|c| c.as_str())
+                            .map(|s| s.contains("quiver hook"))
+                            .unwrap_or(false)
+                    {
+                        o.insert("command".into(), Value::String(command.to_string()));
+                    }
+                }
+            }
             return;
         }
     }
@@ -668,7 +756,80 @@ mod tests {
             .pointer("/hooks/PreToolUse/0/matcher")
             .and_then(|v| v.as_str())
             .unwrap();
-        assert_eq!(matcher, "Skill|Agent|Task");
+        assert_eq!(
+            matcher, "*",
+            "PreToolUse must match every tool so vetoes can fire on Bash/Read detours"
+        );
+        // UserPromptSubmit has no matcher.
+        assert!(
+            merged
+                .pointer("/hooks/UserPromptSubmit/0/matcher")
+                .is_none()
+        );
+        // Stop entry was wired and has no matcher.
+        let stop = merged
+            .pointer("/hooks/Stop/0/hooks/0/command")
+            .and_then(|v| v.as_str())
+            .unwrap();
+        assert!(stop.contains("quiver hook stop"));
+        assert!(merged.pointer("/hooks/Stop/0/matcher").is_none());
+    }
+
+    #[test]
+    fn merge_upgrades_legacy_matcher_in_place() {
+        // Pre-v3 install had `matcher: "Skill|Agent|Task"`. Re-running init
+        // must rewrite it to `*` without duplicating the entry.
+        let starting = json!({
+            "hooks": {
+                "PreToolUse": [
+                    { "matcher": "Skill|Agent|Task", "hooks": [
+                        { "type": "command",
+                          "command": "/old/bin/quiver hook pre-tool-use" }
+                    ]}
+                ]
+            }
+        });
+        let merged = merge_quiver_hooks(starting, "/new/bin/quiver");
+        let pre = merged
+            .pointer("/hooks/PreToolUse")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        assert_eq!(pre.len(), 1, "must upgrade in place, not duplicate");
+        assert_eq!(pre[0].get("matcher").and_then(|v| v.as_str()), Some("*"));
+        let cmd = pre[0]
+            .pointer("/hooks/0/command")
+            .and_then(|v| v.as_str())
+            .unwrap();
+        assert!(cmd.contains("/new/bin/quiver hook pre-tool-use"));
+    }
+
+    #[test]
+    fn merge_env_writes_enforce_mode() {
+        let merged = merge_quiver_env(json!({}), EnforceMode::Strict);
+        assert_eq!(
+            merged
+                .pointer("/env/QUIVER_ENFORCE")
+                .and_then(|v| v.as_str()),
+            Some("strict")
+        );
+        // Override path: re-running with a different mode must rotate the
+        // value rather than appending a duplicate.
+        let again = merge_quiver_env(merged, EnforceMode::Advisory);
+        assert_eq!(
+            again
+                .pointer("/env/QUIVER_ENFORCE")
+                .and_then(|v| v.as_str()),
+            Some("advisory")
+        );
+        // Other env entries are preserved.
+        let with_user_var = json!({ "env": { "FOO": "bar" } });
+        let m = merge_quiver_env(with_user_var, EnforceMode::Off);
+        assert_eq!(m.pointer("/env/FOO").and_then(|v| v.as_str()), Some("bar"));
+        assert_eq!(
+            m.pointer("/env/QUIVER_ENFORCE").and_then(|v| v.as_str()),
+            Some("off")
+        );
     }
 
     #[test]
@@ -773,6 +934,7 @@ mod tests {
             web_pid_path: root.join("web.pid"),
             web_log_path: root.join("web.log"),
             web_port: DEFAULT_WEB_PORT,
+            enforce: EnforceMode::Strict,
             quiver_bin: "quiver".into(),
         }
     }

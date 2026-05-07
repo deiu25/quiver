@@ -205,6 +205,9 @@ async fn dispatch_event(
             if let Some(top) = hits.first()
                 && catalogue.contains(&top.tool_id)
             {
+                let level = quiver_recommender::policy::Thresholds::from_env()
+                    .classify(top.score)
+                    .as_str();
                 suggestions::record(
                     conn,
                     &session_id,
@@ -212,6 +215,8 @@ async fn dispatch_event(
                     Some(&text),
                     Some(top.score as f64),
                     ts,
+                    Some(level),
+                    None,
                 )?;
                 tracing::info!(
                     session = %session_id,

@@ -7,11 +7,11 @@ repository.workspace = true
 description = "Background daily-task agent that observes Claude Code sessions and writes hint files"
 
 [dependencies]
-quiver-core = { path = "../core", version = "0.1.4" }
-quiver-storage = { path = "../storage", version = "0.1.4" }
-quiver-ingestion = { path = "../ingestion", version = "0.1.4" }
-quiver-recommender = { path = "../recommender", version = "0.1.4" }
-quiver-llm = { path = "../llm", version = "0.1.4" }
+quiver-core = { path = "../core", version = "0.1.5" }
+quiver-storage = { path = "../storage", version = "0.1.5" }
+quiver-ingestion = { path = "../ingestion", version = "0.1.5" }
+quiver-recommender = { path = "../recommender", version = "0.1.5" }
+quiver-llm = { path = "../llm", version = "0.1.5" }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }

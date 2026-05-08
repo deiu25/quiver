@@ -5,6 +5,7 @@ members = [
     "crates/storage",
     "crates/ingestion",
     "crates/recommender",
+    "crates/llm",
     "crates/mcp-server",
     "crates/agent",
     "crates/cli",

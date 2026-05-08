@@ -2697,6 +2697,7 @@ dependencies = [
  "notify",
  "quiver-core",
  "quiver-ingestion",
+ "quiver-llm",
  "quiver-recommender",
  "quiver-storage",
  "reqwest",
@@ -2767,6 +2768,21 @@ dependencies = [
  "tokio",
  "tracing",
  "walkdir",
+]
+
+[[package]]
+name = "quiver-llm"
+version = "0.1.4"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

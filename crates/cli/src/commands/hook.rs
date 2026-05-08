@@ -35,7 +35,7 @@ use quiver_recommender::rerank::{
     DemeritReranker, LanguageReranker, ProjectScopeReranker, Reranker, SuccessReranker,
 };
 use quiver_recommender::search;
-use quiver_storage::{embeddings, fts, open, suggestions, tools};
+use quiver_storage::{embeddings, fts, open, suggestions, tools, turn_intents};
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -664,6 +664,13 @@ fn pre_tool_use(event: serde_json::Value) -> Result<()> {
     let competing = !matches_invocation(&top.tool_id, tool);
     let delta = top.score - chosen_score;
 
+    // Phase 8 v5: async LLM intent cache. If the UserPromptSubmit-spawned
+    // classify-intent child has already written a verdict for this session
+    // and the user's prompt was a read-only investigation, skip the veto
+    // and fall through to advisory metadata. Cache miss / mutation verdict
+    // → existing strict behaviour preserved.
+    let intent_says_read_only = !session_id.is_empty() && turn_intent_read_only(&conn, &session_id);
+
     if strict
         && policy.is_directive()
         && competing
@@ -672,6 +679,7 @@ fn pre_tool_use(event: serde_json::Value) -> Result<()> {
         && !(tool == "Bash" && trivial_bypass_enabled() && is_trivial_bash(&event))
         && !session_id.is_empty()
         && !signature.is_empty()
+        && !intent_says_read_only
     {
         // Single-veto-per-tuple rule: a re-invocation flips bypassed=1 and
         // passes through.
@@ -708,6 +716,34 @@ fn pre_tool_use(event: serde_json::Value) -> Result<()> {
     }
 
     advisory_metadata(&conn, &hits, tool, &task_trim)
+}
+
+/// Look up the freshest `turn_intents` row for `session_id` (within the
+/// configured TTL) and return `true` iff the LLM verdict says the user's
+/// prompt was a read-only investigation. DB errors / cache miss / mutation
+/// verdict all return `false` — that preserves the existing strict-mode
+/// veto behaviour when the classifier hasn't run yet.
+fn turn_intent_read_only(conn: &Connection, session_id: &str) -> bool {
+    if intent_classifier_disabled() {
+        return false;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let ttl = std::env::var("QUIVER_INTENT_CACHE_TTL_SECS")
+        .ok()
+        .and_then(|s| s.trim().parse::<i64>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(600);
+    match turn_intents::get_latest(conn, session_id, now, ttl) {
+        Ok(Some(row)) => !row.is_mutation,
+        Ok(None) => false,
+        Err(e) => {
+            tracing::debug!("turn_intents::get_latest failed: {e:#}");
+            false
+        },
+    }
 }
 
 fn advisory_metadata(

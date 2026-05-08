@@ -461,6 +461,9 @@ fn spawn_detached_classify_intent(prompt: &str, session_id: &str) {
     if session_id.trim().is_empty() {
         return;
     }
+    if !check_and_set_cooldown("classify_intent", session_id, 10) {
+        return;
+    }
     if intent_classifier_disabled() {
         return;
     }
@@ -704,7 +707,16 @@ fn pre_tool_use(event: serde_json::Value) -> Result<()> {
             Some(policy.as_str()),
             Some(&signature),
         )?;
-        let _ = suggestions::mark_vetoed(&conn, row_id);
+        
+        let marked = suggestions::mark_vetoed(&conn, row_id).unwrap_or(false);
+        if !marked {
+            return advisory_metadata(&conn, &hits, tool, &task_trim);
+        }
+
+        if !check_and_set_cooldown("veto", &session_id, 5) {
+            return advisory_metadata(&conn, &hits, tool, &task_trim);
+        }
+
         let reason = format!(
             "Quiver: a higher-confidence installed tool fits this task. \
              Use `{invoke}` (id={}, score={:.3}, Δ={:.3}) instead of `{tool}`. \
@@ -909,7 +921,14 @@ fn stop(event: serde_json::Value) -> Result<()> {
     else {
         return Ok(());
     };
-    let _ = suggestions::mark_nudged(&conn, row.id);
+    let marked = suggestions::mark_nudged(&conn, row.id).unwrap_or(false);
+    if !marked {
+        return Ok(());
+    }
+    if !check_and_set_cooldown("stop", session_id, 5) {
+        return Ok(());
+    }
+    
     let task_summary = row.task_text.as_deref().unwrap_or("(no task summary)");
     let score = row.score.unwrap_or(0.0);
     let reason = format!(
@@ -1097,6 +1116,40 @@ fn is_env_assignment(token: &str) -> bool {
     bytes[..eq_pos]
         .iter()
         .all(|&b| b == b'_' || b.is_ascii_uppercase() || b.is_ascii_digit())
+}
+
+/// A hard circuit-breaker based on mtime of a lock file, preventing high-frequency
+/// loops (like Claude Code rapid retries) when the DB update is delayed or raced.
+fn check_and_set_cooldown(action: &str, session_id: &str, cooldown_secs: u64) -> bool {
+    if session_id.trim().is_empty() {
+        return true;
+    }
+    let cache_dir = if let Some(home) = std::env::var_os("HOME") {
+        std::path::PathBuf::from(home).join(".cache").join("quiver").join("locks")
+    } else {
+        std::path::PathBuf::from("/tmp/quiver/locks")
+    };
+    let _ = std::fs::create_dir_all(&cache_dir);
+    let lock_path = cache_dir.join(format!("{action}_{session_id}.lock"));
+
+    if let Ok(meta) = std::fs::metadata(&lock_path) {
+        if let Ok(modified) = meta.modified() {
+            if let Ok(elapsed) = modified.elapsed() {
+                if elapsed.as_secs() < cooldown_secs {
+                    return false; // recently touched, cooldown active
+                }
+            }
+        }
+    }
+
+    // Touch file
+    let _ = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&lock_path);
+
+    true
 }
 
 fn format_user_prompt_block(top: &TopHit, body: Option<&str>) -> String {

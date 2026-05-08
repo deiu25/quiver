@@ -405,6 +405,12 @@ pub(crate) fn merge_quiver_hooks(mut settings: Value, quiver_bin: &str) -> Value
 /// Merge `env.QUIVER_ENFORCE = <mode>` into `settings`. Other env entries are
 /// preserved; existing `QUIVER_ENFORCE` is overwritten so re-running `quiver
 /// init --enforce <new>` rotates the mode in place.
+///
+/// Also writes `env.QUIVER_INTENT_CLASSIFIER = auto` (Phase 8 v5) iff the
+/// key is missing — auto-enables the Sonnet intent cache when the user has
+/// `ANTHROPIC_API_KEY` or `claude` on PATH, while preserving any explicit
+/// override the user has set in settings.json (e.g. `heuristic` for users
+/// who want to opt out permanently).
 pub(crate) fn merge_quiver_env(mut settings: Value, enforce: EnforceMode) -> Value {
     let obj = match settings.as_object_mut() {
         Some(o) => o,
@@ -418,6 +424,9 @@ pub(crate) fn merge_quiver_env(mut settings: Value, enforce: EnforceMode) -> Val
         "QUIVER_ENFORCE".to_string(),
         Value::String(enforce.as_str().to_string()),
     );
+    env_obj
+        .entry("QUIVER_INTENT_CLASSIFIER".to_string())
+        .or_insert_with(|| Value::String("auto".to_string()));
     settings
 }
 
@@ -837,6 +846,42 @@ mod tests {
         let first = merge_quiver_hooks(json!({}), "/bin/quiver");
         let second = merge_quiver_hooks(first.clone(), "/bin/quiver");
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn merge_env_writes_intent_classifier_default_auto() {
+        let merged = merge_quiver_env(json!({}), EnforceMode::Strict);
+        assert_eq!(
+            merged
+                .pointer("/env/QUIVER_INTENT_CLASSIFIER")
+                .and_then(|v| v.as_str()),
+            Some("auto")
+        );
+    }
+
+    #[test]
+    fn merge_env_preserves_user_intent_classifier_override() {
+        // User has explicitly set heuristic in settings.json — re-running
+        // init must NOT clobber that value back to "auto".
+        let starting = json!({
+            "env": {
+                "QUIVER_INTENT_CLASSIFIER": "heuristic"
+            }
+        });
+        let merged = merge_quiver_env(starting, EnforceMode::Strict);
+        assert_eq!(
+            merged
+                .pointer("/env/QUIVER_INTENT_CLASSIFIER")
+                .and_then(|v| v.as_str()),
+            Some("heuristic")
+        );
+        // QUIVER_ENFORCE still rotates as before.
+        assert_eq!(
+            merged
+                .pointer("/env/QUIVER_ENFORCE")
+                .and_then(|v| v.as_str()),
+            Some("strict")
+        );
     }
 
     #[test]

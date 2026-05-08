@@ -15,11 +15,12 @@ use rusqlite::Connection;
 
 use quiver_ingestion::github_repo;
 use quiver_ingestion::llm_extract;
+use quiver_ingestion::project_scope;
 use quiver_recommender::embed::Embedder;
 use quiver_recommender::params::{
     COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
 };
-use quiver_recommender::rerank::{DemeritReranker, Reranker};
+use quiver_recommender::rerank::{DemeritReranker, ProjectScopeReranker, Reranker};
 use quiver_recommender::search;
 use quiver_storage::{embeddings, fts, open, scores, sources, tools, usage};
 
@@ -117,8 +118,12 @@ impl QuiverServer {
     fn recommend(&self, Parameters(p): Parameters<RecommendParams>) -> Result<String, ErrorData> {
         let k = p.k.unwrap_or(3).clamp(1, 50);
         let task: String = p.task.chars().take(TASK_INPUT_LIMIT).collect();
+        let project_root: Option<PathBuf> = p.cwd.as_deref().map(PathBuf::from);
 
-        let q_emb = {
+        // Initialise embedder *outside* the conn lock so the lazy fastembed
+        // load doesn't block other handlers; we need it for both query
+        // embedding and project-scope upsert.
+        {
             let mut emb = self
                 .state
                 .embedder
@@ -128,6 +133,14 @@ impl QuiverServer {
                 tracing::info!("loading fastembed model (one-time)");
                 *emb = Some(Embedder::new().map_err(err)?);
             }
+        }
+
+        let q_emb = {
+            let emb = self
+                .state
+                .embedder
+                .lock()
+                .map_err(|e| err(anyhow!("{e}")))?;
             emb.as_ref()
                 .expect("embedder just initialized")
                 .embed_one(&task)
@@ -135,6 +148,23 @@ impl QuiverServer {
         };
 
         let conn = self.state.conn.lock().map_err(|e| err(anyhow!("{e}")))?;
+
+        // Best-effort project-scope ingestion before search. Failures only
+        // log — never block recommend.
+        if let Some(root) = project_root.as_deref() {
+            let emb = self
+                .state
+                .embedder
+                .lock()
+                .map_err(|e| err(anyhow!("{e}")))?;
+            let embedder = emb.as_ref().expect("embedder just initialized");
+            if let Err(e) = project_scope::upsert_project_skills(&conn, embedder, root) {
+                tracing::warn!(
+                    project_root = %root.display(),
+                    "project skill ingestion failed: {e:#}"
+                );
+            }
+        }
 
         let vec_sims: HashMap<String, f32> = embeddings::vec_search(&conn, &q_emb, VEC_CANDIDATES)
             .map_err(err)?
@@ -160,6 +190,11 @@ impl QuiverServer {
         DemeritReranker::new(&task)
             .apply(&mut hits, &conn)
             .map_err(err)?;
+        ProjectScopeReranker::new(project_root.as_deref())
+            .apply(&mut hits, &conn)
+            .map_err(err)?;
+        // Drop any rows the shadow filter zeroed before returning to caller.
+        hits.retain(|h| h.score > 0.0);
         let metas: HashMap<String, _> = tools::list_all(&conn)
             .map_err(err)?
             .into_iter()
@@ -197,8 +232,9 @@ impl QuiverServer {
     ) -> Result<String, ErrorData> {
         let task: String = p.task.chars().take(TASK_INPUT_LIMIT).collect();
         let candidate = p.candidate_tool.trim().to_string();
+        let project_root: Option<PathBuf> = p.cwd.as_deref().map(PathBuf::from);
 
-        let q_emb = {
+        {
             let mut emb = self
                 .state
                 .embedder
@@ -208,6 +244,14 @@ impl QuiverServer {
                 tracing::info!("loading fastembed model (one-time)");
                 *emb = Some(Embedder::new().map_err(err)?);
             }
+        }
+
+        let q_emb = {
+            let emb = self
+                .state
+                .embedder
+                .lock()
+                .map_err(|e| err(anyhow!("{e}")))?;
             emb.as_ref()
                 .expect("embedder just initialized")
                 .embed_one(&task)
@@ -215,6 +259,22 @@ impl QuiverServer {
         };
 
         let conn = self.state.conn.lock().map_err(|e| err(anyhow!("{e}")))?;
+
+        // Project-scope upsert before scoring (best-effort).
+        if let Some(root) = project_root.as_deref() {
+            let emb = self
+                .state
+                .embedder
+                .lock()
+                .map_err(|e| err(anyhow!("{e}")))?;
+            let embedder = emb.as_ref().expect("embedder just initialized");
+            if let Err(e) = project_scope::upsert_project_skills(&conn, embedder, root) {
+                tracing::warn!(
+                    project_root = %root.display(),
+                    "project skill ingestion failed: {e:#}"
+                );
+            }
+        }
 
         let vec_sims: HashMap<String, f32> = embeddings::vec_search(&conn, &q_emb, VEC_CANDIDATES)
             .map_err(err)?
@@ -234,6 +294,10 @@ impl QuiverServer {
         DemeritReranker::new(&task)
             .apply(&mut hits, &conn)
             .map_err(err)?;
+        ProjectScopeReranker::new(project_root.as_deref())
+            .apply(&mut hits, &conn)
+            .map_err(err)?;
+        hits.retain(|h| h.score > 0.0);
         if hits.is_empty() {
             let res = ShouldInvokeResult {
                 decision: "no_strong_signal".into(),
@@ -537,6 +601,8 @@ mod tests {
             added_at: now,
             last_seen_at: now,
             last_used_at: None,
+            scope: quiver_core::tool::ToolScope::User,
+            scope_root: None,
         }
     }
 

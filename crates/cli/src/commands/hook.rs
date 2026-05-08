@@ -31,7 +31,9 @@ use quiver_recommender::params::{
 };
 use quiver_recommender::policy::{Policy, Thresholds};
 use quiver_recommender::project;
-use quiver_recommender::rerank::{DemeritReranker, LanguageReranker, Reranker, SuccessReranker};
+use quiver_recommender::rerank::{
+    DemeritReranker, LanguageReranker, ProjectScopeReranker, Reranker, SuccessReranker,
+};
 use quiver_recommender::search;
 use quiver_storage::{embeddings, fts, open, suggestions, tools};
 use rusqlite::Connection;
@@ -710,6 +712,20 @@ fn top_n(conn: &Connection, task: &str, k: usize) -> Result<Vec<search::Hit>> {
     let embedder = Embedder::new()?;
     let q_emb = embedder.embed_one(task)?;
 
+    // Project-scope upsert before search: detect cwd, ingest any new SKILL.md
+    // under `<cwd>/.claude/skills/`, persist into the catalog. Best-effort —
+    // log + ignore failures so hook latency stays bounded by the embed call.
+    let cwd_for_project = std::env::current_dir().ok();
+    if let Some(ref root) = cwd_for_project
+        && let Err(err) =
+            quiver_ingestion::project_scope::upsert_project_skills(conn, &embedder, root)
+    {
+        tracing::warn!(
+            project_root = %root.display(),
+            "project skill ingestion failed: {err:#}"
+        );
+    }
+
     let vec_sims: HashMap<String, f32> = embeddings::vec_search(conn, &q_emb, VEC_CANDIDATES)?
         .into_iter()
         .map(|(id, dist)| (id, 1.0 - dist))
@@ -736,6 +752,7 @@ fn top_n(conn: &Connection, task: &str, k: usize) -> Result<Vec<search::Hit>> {
     );
     SuccessReranker::default().apply(&mut hits, conn)?;
     DemeritReranker::new(task).apply(&mut hits, conn)?;
+    ProjectScopeReranker::new(cwd_for_project.as_deref()).apply(&mut hits, conn)?;
     apply_language_filter(conn, &mut hits);
     hits.truncate(k);
     Ok(hits)

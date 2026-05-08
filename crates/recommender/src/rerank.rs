@@ -6,12 +6,13 @@
 //! Phase 1–3 behaviour is preserved when telemetry is empty.
 
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use rusqlite::Connection;
 
 use crate::project::{Language, skill_language};
 use crate::search::Hit;
-use quiver_core::tool::ToolMeta;
+use quiver_core::tool::{ToolMeta, ToolScope};
 use quiver_storage::tools;
 
 /// Default boost factor — chosen so a tool with 100 % success rate gets a
@@ -284,6 +285,118 @@ impl Reranker for DemeritReranker {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Per-project scope boost — surfaces skills that live under <cwd>/.claude/skills/
+// ahead of globally installed twins.
+// ---------------------------------------------------------------------------
+
+/// Default multiplicative boost for project-scope tools when their
+/// `scope_root` matches the current cwd. Tuned alongside the score-band
+/// thresholds: at α=0.20, a project tool sitting at 0.50 lifts to 0.60
+/// (Strong), and one at 0.65 lifts to 0.78 (Mandatory). Stays under 1.0
+/// so a project tool is never crowned the winner without underlying
+/// vec/FTS support.
+pub const PROJECT_BOOST_ALPHA: f32 = 0.20;
+
+/// Reranker that boosts catalog rows whose `scope=Project` and
+/// `scope_root == self.cwd_canonical`, then drops any global twin (same
+/// `name`) so the project version wins outright. No-op when the cwd is
+/// unknown, when no candidate carries `scope=Project`, or when the env
+/// kill-switch `QUIVER_PROJECT_DISABLED=1` is set.
+#[derive(Debug, Clone)]
+pub struct ProjectScopeReranker {
+    pub cwd_canonical: Option<String>,
+    pub alpha: f32,
+    pub disabled: bool,
+}
+
+impl ProjectScopeReranker {
+    /// Read knobs from env once at construction, mirroring `DemeritReranker`'s
+    /// pattern (avoids env-mutation races between parallel tests).
+    pub fn new(cwd: Option<&Path>) -> Self {
+        Self {
+            cwd_canonical: cwd
+                .and_then(|p| std::fs::canonicalize(p).ok())
+                .and_then(|p| p.to_str().map(str::to_string)),
+            alpha: env_f32("QUIVER_PROJECT_BOOST", PROJECT_BOOST_ALPHA),
+            disabled: read_project_disabled(),
+        }
+    }
+
+    /// Force the reranker on/off regardless of env. For tests.
+    pub fn with_disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+}
+
+fn read_project_disabled() -> bool {
+    std::env::var("QUIVER_PROJECT_DISABLED")
+        .ok()
+        .map(|s| {
+            let t = s.trim();
+            t == "1" || t.eq_ignore_ascii_case("true")
+        })
+        .unwrap_or(false)
+}
+
+impl Reranker for ProjectScopeReranker {
+    fn apply(&self, hits: &mut [Hit], conn: &Connection) -> anyhow::Result<()> {
+        if hits.is_empty() || self.disabled || self.alpha <= 0.0 {
+            return Ok(());
+        }
+        let Some(cwd) = self.cwd_canonical.as_deref() else {
+            return Ok(());
+        };
+        let metas = load_metas(conn, hits)?;
+
+        // Pass 1: apply boost to project hits matching the active cwd, and
+        // collect the names of the boosted project tools so we can shadow
+        // their global twins in pass 2.
+        let mut shadowed_names: HashSet<String> = HashSet::new();
+        for hit in hits.iter_mut() {
+            let Some(meta) = metas.get(&hit.tool_id) else {
+                continue;
+            };
+            if meta.scope != ToolScope::Project {
+                continue;
+            }
+            if meta.scope_root.as_deref() != Some(cwd) {
+                continue;
+            }
+            hit.score *= 1.0 + self.alpha;
+            shadowed_names.insert(meta.name.clone());
+        }
+
+        if shadowed_names.is_empty() {
+            return Ok(());
+        }
+
+        // Pass 2: drop user-scope twins by name. We can't do this inside
+        // pass 1 because we walk `&mut [Hit]`; instead zero-out the score on
+        // shadowed rows and filter via re-sort + truncate-by-tag at the
+        // call site. Since `apply` operates on a fixed slice, we zero the
+        // score so the row sinks to the bottom and downstream `truncate(k)`
+        // discards it — same effect as removing without changing the slice
+        // length.
+        for hit in hits.iter_mut() {
+            let Some(meta) = metas.get(&hit.tool_id) else {
+                continue;
+            };
+            if meta.scope == ToolScope::User && shadowed_names.contains(&meta.name) {
+                hit.score = 0.0;
+            }
+        }
+
+        hits.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        Ok(())
+    }
+}
+
 fn load_metas(conn: &Connection, hits: &[Hit]) -> anyhow::Result<HashMap<String, ToolMeta>> {
     let mut out = HashMap::with_capacity(hits.len());
     for h in hits {
@@ -471,6 +584,8 @@ mod language_reranker_tests {
             added_at: Utc::now(),
             last_seen_at: Utc::now(),
             last_used_at: None,
+            scope: quiver_core::tool::ToolScope::User,
+            scope_root: None,
         }
     }
 
@@ -667,6 +782,8 @@ mod demerit_tests {
                 added_at: now,
                 last_seen_at: now,
                 last_used_at: None,
+                scope: quiver_core::tool::ToolScope::User,
+                scope_root: None,
             };
             quiver_storage::tools::upsert(&conn, &meta).unwrap();
         }
@@ -869,6 +986,290 @@ mod demerit_tests {
             hits[0].score < after_boost - 0.05,
             "boost={after_boost}, after_demerit={}",
             hits[0].score
+        );
+    }
+}
+
+#[cfg(test)]
+mod project_scope_tests {
+    use super::*;
+    use chrono::Utc;
+    use quiver_core::tool::{ToolMeta, ToolScope, ToolType};
+    use quiver_storage::open;
+
+    fn open_with_seed(metas: &[ToolMeta]) -> Connection {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("q.sqlite");
+        let conn = open(&path).unwrap();
+        std::mem::forget(dir);
+        for m in metas {
+            quiver_storage::tools::upsert(&conn, m).unwrap();
+        }
+        conn
+    }
+
+    fn make_meta(id: &str, name: &str, scope: ToolScope, scope_root: Option<&str>) -> ToolMeta {
+        let now = Utc::now();
+        ToolMeta {
+            id: id.into(),
+            r#type: ToolType::Skill,
+            name: name.into(),
+            source_repo: None,
+            install_path: None,
+            description: None,
+            long_description: None,
+            category: None,
+            triggers: vec![],
+            examples: vec![],
+            invocation: None,
+            requires: vec![],
+            enabled: true,
+            added_at: now,
+            last_seen_at: now,
+            last_used_at: None,
+            scope,
+            scope_root: scope_root.map(str::to_string),
+        }
+    }
+
+    fn clear_project_env() {
+        for k in ["QUIVER_PROJECT_BOOST", "QUIVER_PROJECT_DISABLED"] {
+            unsafe {
+                std::env::remove_var(k);
+            }
+        }
+    }
+
+    /// Real on-disk path so canonicalize() succeeds.
+    fn real_path() -> (tempfile::TempDir, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let canonical = std::fs::canonicalize(dir.path())
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        (dir, canonical)
+    }
+
+    #[test]
+    fn boosts_project_hit_by_one_plus_alpha() {
+        clear_project_env();
+        let (dir, canonical) = real_path();
+        let proj = make_meta(
+            "skill:proj:abc:tdd",
+            "tdd",
+            ToolScope::Project,
+            Some(&canonical),
+        );
+        let conn = open_with_seed(&[proj]);
+        let mut hits = vec![Hit {
+            tool_id: "skill:proj:abc:tdd".into(),
+            score: 0.50,
+        }];
+        ProjectScopeReranker::new(Some(dir.path()))
+            .apply(&mut hits, &conn)
+            .unwrap();
+        // 0.50 * 1.20 = 0.60
+        assert!((hits[0].score - 0.60).abs() < 1e-4, "got {}", hits[0].score);
+    }
+
+    #[test]
+    fn shadows_global_twin_by_name() {
+        clear_project_env();
+        let (dir, canonical) = real_path();
+        let proj = make_meta(
+            "skill:proj:abc:python-testing",
+            "python-testing",
+            ToolScope::Project,
+            Some(&canonical),
+        );
+        let glob = make_meta(
+            "skill:python-testing",
+            "python-testing",
+            ToolScope::User,
+            None,
+        );
+        let conn = open_with_seed(&[proj, glob]);
+        let mut hits = vec![
+            Hit {
+                tool_id: "skill:python-testing".into(),
+                score: 0.85,
+            },
+            Hit {
+                tool_id: "skill:proj:abc:python-testing".into(),
+                score: 0.60,
+            },
+        ];
+        ProjectScopeReranker::new(Some(dir.path()))
+            .apply(&mut hits, &conn)
+            .unwrap();
+        // Project lifted to 0.72, global zeroed (shadow), so project leads
+        // and the global twin sinks to the bottom.
+        assert_eq!(hits[0].tool_id, "skill:proj:abc:python-testing");
+        let global = hits
+            .iter()
+            .find(|h| h.tool_id == "skill:python-testing")
+            .unwrap();
+        assert!(
+            global.score == 0.0,
+            "global twin should be zeroed, got {}",
+            global.score
+        );
+    }
+
+    #[test]
+    fn no_op_when_cwd_unknown() {
+        clear_project_env();
+        let proj = make_meta(
+            "skill:proj:abc:tdd",
+            "tdd",
+            ToolScope::Project,
+            Some("/some/other/root"),
+        );
+        let conn = open_with_seed(&[proj]);
+        let mut hits = vec![Hit {
+            tool_id: "skill:proj:abc:tdd".into(),
+            score: 0.50,
+        }];
+        ProjectScopeReranker::new(None)
+            .apply(&mut hits, &conn)
+            .unwrap();
+        assert!((hits[0].score - 0.50).abs() < 1e-6);
+    }
+
+    #[test]
+    fn no_op_for_project_skill_under_other_root() {
+        clear_project_env();
+        let (dir, _canonical_a) = real_path();
+        let proj = make_meta(
+            "skill:proj:abc:tdd",
+            "tdd",
+            ToolScope::Project,
+            Some("/totally/different/root"),
+        );
+        let conn = open_with_seed(&[proj]);
+        let mut hits = vec![Hit {
+            tool_id: "skill:proj:abc:tdd".into(),
+            score: 0.50,
+        }];
+        ProjectScopeReranker::new(Some(dir.path()))
+            .apply(&mut hits, &conn)
+            .unwrap();
+        assert!((hits[0].score - 0.50).abs() < 1e-6);
+    }
+
+    #[test]
+    fn disabled_passes_through() {
+        let (dir, canonical) = real_path();
+        let proj = make_meta(
+            "skill:proj:abc:tdd",
+            "tdd",
+            ToolScope::Project,
+            Some(&canonical),
+        );
+        let conn = open_with_seed(&[proj]);
+        let mut hits = vec![Hit {
+            tool_id: "skill:proj:abc:tdd".into(),
+            score: 0.50,
+        }];
+        ProjectScopeReranker::new(Some(dir.path()))
+            .with_disabled(true)
+            .apply(&mut hits, &conn)
+            .unwrap();
+        assert!((hits[0].score - 0.50).abs() < 1e-6);
+    }
+
+    #[test]
+    fn changes_ordering_against_global() {
+        clear_project_env();
+        let (dir, canonical) = real_path();
+        let proj = make_meta(
+            "skill:proj:abc:custom-tdd",
+            "custom-tdd",
+            ToolScope::Project,
+            Some(&canonical),
+        );
+        let glob = make_meta("skill:tdd-workflow", "tdd-workflow", ToolScope::User, None);
+        let conn = open_with_seed(&[proj, glob]);
+        let mut hits = vec![
+            Hit {
+                tool_id: "skill:tdd-workflow".into(),
+                score: 0.55,
+            },
+            Hit {
+                tool_id: "skill:proj:abc:custom-tdd".into(),
+                score: 0.50,
+            },
+        ];
+        ProjectScopeReranker::new(Some(dir.path()))
+            .apply(&mut hits, &conn)
+            .unwrap();
+        // Project: 0.50 * 1.20 = 0.60 → beats global 0.55. Names differ so
+        // no shadow filter applies; both stay in the result list.
+        assert_eq!(hits[0].tool_id, "skill:proj:abc:custom-tdd");
+        let glob_hit = hits
+            .iter()
+            .find(|h| h.tool_id == "skill:tdd-workflow")
+            .unwrap();
+        assert!(
+            glob_hit.score > 0.0,
+            "non-twin global should keep its score, got {}",
+            glob_hit.score
+        );
+    }
+
+    #[test]
+    fn alpha_zero_is_identity() {
+        // Construct directly instead of going through env so we don't race
+        // with other parallel tests that touch QUIVER_PROJECT_BOOST.
+        let (dir, canonical) = real_path();
+        let proj = make_meta(
+            "skill:proj:abc:tdd",
+            "tdd",
+            ToolScope::Project,
+            Some(&canonical),
+        );
+        let conn = open_with_seed(&[proj]);
+        let mut hits = vec![Hit {
+            tool_id: "skill:proj:abc:tdd".into(),
+            score: 0.50,
+        }];
+        let r = ProjectScopeReranker {
+            cwd_canonical: Some(canonical),
+            alpha: 0.0,
+            disabled: false,
+        };
+        r.apply(&mut hits, &conn).unwrap();
+        assert!((hits[0].score - 0.50).abs() < 1e-6);
+        // Keep `dir` alive until after the assertion.
+        drop(dir);
+    }
+
+    #[test]
+    fn env_clamps_alpha_into_unit_interval() {
+        // Pure-construction test, no apply. Still serialises with other env
+        // mutators in this module to avoid the race.
+        let key = "QUIVER_PROJECT_BOOST";
+        let prev = std::env::var(key).ok();
+        unsafe {
+            std::env::set_var(key, "10.0");
+        }
+        let high = ProjectScopeReranker::new(None);
+        unsafe {
+            std::env::set_var(key, "-3.0");
+        }
+        let low = ProjectScopeReranker::new(None);
+        unsafe {
+            match prev {
+                Some(v) => std::env::set_var(key, v),
+                None => std::env::remove_var(key),
+            }
+        }
+        assert!((high.alpha - 1.0).abs() < 1e-6, "alpha was {}", high.alpha);
+        assert!(
+            low.alpha >= 0.0 && low.alpha <= 1.0,
+            "alpha was {}",
+            low.alpha
         );
     }
 }

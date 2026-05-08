@@ -18,6 +18,13 @@ pub struct RecommendParams {
     /// Number of results to return; defaults to 3.
     #[serde(default)]
     pub k: Option<usize>,
+    /// Optional project root used for per-project skill discovery and the
+    /// `ProjectScopeReranker` boost. When set, any SKILL.md under
+    /// `<cwd>/.claude/skills/` is ingested into the catalog and the matching
+    /// project tools outrank globally installed twins. Defaults to no project
+    /// context.
+    #[serde(default)]
+    pub cwd: Option<String>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -168,6 +175,10 @@ pub struct ShouldInvokeParams {
     /// The tool the model is about to call. Either an installed tool id
     /// (`skill:python-testing`) or a built-in tool name (`Bash`, `Read`).
     pub candidate_tool: String,
+    /// Optional project root for per-project skill discovery + boost. Same
+    /// semantics as `RecommendParams.cwd`.
+    #[serde(default)]
+    pub cwd: Option<String>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]

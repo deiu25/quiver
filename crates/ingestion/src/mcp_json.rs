@@ -104,6 +104,8 @@ pub async fn parse_mcp_servers(
             added_at: now,
             last_seen_at: now,
             last_used_at: None,
+            scope: quiver_core::tool::ToolScope::User,
+            scope_root: None,
         });
     }
     out.sort_by(|a, b| a.id.cmp(&b.id));

@@ -1,9 +1,13 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 
+use quiver_ingestion::project_scope;
 use quiver_recommender::params::{
     COS_WEIGHT, FTS_CANDIDATES, FTS_WEIGHT, VEC_CANDIDATES, build_fts_query,
 };
-use quiver_recommender::rerank::{DemeritReranker, Reranker, SuccessReranker};
+use quiver_recommender::rerank::{
+    DemeritReranker, ProjectScopeReranker, Reranker, SuccessReranker,
+};
 use quiver_recommender::{embed::Embedder, search};
 use quiver_storage::{embeddings, fts, open, tools};
 use serde::Serialize;
@@ -22,11 +26,27 @@ struct RecommendHit {
     install_path: Option<String>,
 }
 
-pub async fn run(task: String, json: bool) -> anyhow::Result<()> {
+pub async fn run(task: String, json: bool, cwd: Option<PathBuf>) -> anyhow::Result<()> {
     let conn = open(&default_db_path()?)?;
 
     let embedder = Embedder::new()?;
     let q_emb = embedder.embed_one(&task)?;
+
+    // Resolve project root: explicit --cwd wins, else current_dir().
+    let project_root: Option<PathBuf> = cwd.or_else(|| std::env::current_dir().ok());
+
+    // Ingest any per-project skills under `<cwd>/.claude/skills/` before we
+    // query the catalog. Best-effort: failures only log and pass through.
+    if let Some(ref root) = project_root {
+        match project_scope::upsert_project_skills(&conn, &embedder, root) {
+            Ok(0) => {},
+            Ok(n) => tracing::debug!(project_root = %root.display(), "ingested {n} project skills"),
+            Err(err) => tracing::warn!(
+                project_root = %root.display(),
+                "project skill ingestion failed: {err:#}"
+            ),
+        }
+    }
 
     // sqlite-vec returns cosine *distance* in [0, 2]; convert to similarity.
     let vec_sims: HashMap<String, f32> = embeddings::vec_search(&conn, &q_emb, VEC_CANDIDATES)?
@@ -56,9 +76,10 @@ pub async fn run(task: String, json: bool) -> anyhow::Result<()> {
         }
     };
 
-    // Pull a wider candidate set, then rerank by historical success_rate (PLAN
-    // §8.3). Reranker is a no-op when tool_scores is empty, so Phase 1–3
-    // behaviour is preserved.
+    // Pull a wider candidate set, then run the reranker stack.
+    // Order: SuccessReranker → DemeritReranker → ProjectScopeReranker → truncate.
+    // (LanguageReranker is hook-only — keeps the CLI idempotent for ad-hoc
+    // queries where the user may be probing a project that isn't theirs.)
     let mut hits = search::hybrid_from_score_maps(
         &vec_sims,
         &fts_hits,
@@ -68,6 +89,7 @@ pub async fn run(task: String, json: bool) -> anyhow::Result<()> {
     );
     SuccessReranker::default().apply(&mut hits, &conn)?;
     DemeritReranker::new(&task).apply(&mut hits, &conn)?;
+    ProjectScopeReranker::new(project_root.as_deref()).apply(&mut hits, &conn)?;
     hits.truncate(3);
 
     let by_id: HashMap<String, _> = tools::list_all(&conn)?

@@ -284,6 +284,8 @@ mod tests {
             added_at: Utc::now(),
             last_seen_at: Utc::now(),
             last_used_at: None,
+            scope: quiver_core::tool::ToolScope::User,
+            scope_root: None,
         }
     }
 

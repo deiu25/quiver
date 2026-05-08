@@ -7,6 +7,7 @@ pub mod mcp_npm;
 pub mod persist;
 pub mod plugin_json;
 pub mod plugin_manifest;
+pub mod project_scope;
 pub mod session_jsonl;
 pub mod skill_md;
 pub mod sync;

@@ -73,6 +73,8 @@ fn synth_meta(t: &BenchTool) -> ToolMeta {
         added_at: now,
         last_seen_at: now,
         last_used_at: None,
+        scope: quiver_core::tool::ToolScope::User,
+        scope_root: None,
     }
 }
 

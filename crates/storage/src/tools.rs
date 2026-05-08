@@ -1,6 +1,6 @@
 use anyhow::{Context, anyhow};
 use chrono::{DateTime, Utc};
-use quiver_core::tool::{ToolMeta, ToolType};
+use quiver_core::tool::{ToolMeta, ToolScope, ToolType};
 use rusqlite::{Connection, params};
 
 fn type_to_str(t: ToolType) -> &'static str {
@@ -24,6 +24,21 @@ fn type_from_str(s: &str) -> anyhow::Result<ToolType> {
     })
 }
 
+fn scope_to_str(s: ToolScope) -> &'static str {
+    match s {
+        ToolScope::User => "user",
+        ToolScope::Project => "project",
+    }
+}
+
+fn scope_from_str(s: &str) -> anyhow::Result<ToolScope> {
+    Ok(match s {
+        "user" => ToolScope::User,
+        "project" => ToolScope::Project,
+        other => return Err(anyhow!("unknown tool scope {other:?}")),
+    })
+}
+
 fn parse_ts(s: &str) -> anyhow::Result<DateTime<Utc>> {
     Ok(DateTime::parse_from_rfc3339(s)
         .with_context(|| format!("parse RFC3339 timestamp {s:?}"))?
@@ -41,8 +56,8 @@ pub fn upsert(conn: &Connection, m: &ToolMeta) -> anyhow::Result<()> {
         "INSERT INTO tools (
             id, type, name, source_repo, install_path, description, long_description,
             category, triggers, examples, invocation, requires, enabled,
-            added_at, last_seen_at, last_used_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            added_at, last_seen_at, last_used_at, scope, scope_root
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
             type             = excluded.type,
             name             = excluded.name,
@@ -56,7 +71,9 @@ pub fn upsert(conn: &Connection, m: &ToolMeta) -> anyhow::Result<()> {
             invocation       = excluded.invocation,
             requires         = excluded.requires,
             enabled          = excluded.enabled,
-            last_seen_at     = excluded.last_seen_at",
+            last_seen_at     = excluded.last_seen_at,
+            scope            = excluded.scope,
+            scope_root       = excluded.scope_root",
         params![
             m.id,
             type_to_str(m.r#type),
@@ -74,6 +91,8 @@ pub fn upsert(conn: &Connection, m: &ToolMeta) -> anyhow::Result<()> {
             added,
             seen,
             last_used,
+            scope_to_str(m.scope),
+            m.scope_root,
         ],
     )?;
     Ok(())
@@ -83,7 +102,7 @@ pub fn list_all(conn: &Connection) -> anyhow::Result<Vec<ToolMeta>> {
     let mut stmt = conn.prepare(
         "SELECT id, type, name, source_repo, install_path, description, long_description,
                 category, triggers, examples, invocation, requires, enabled,
-                added_at, last_seen_at, last_used_at
+                added_at, last_seen_at, last_used_at, scope, scope_root
          FROM tools ORDER BY type, name",
     )?;
     let rows = stmt
@@ -105,6 +124,8 @@ pub fn list_all(conn: &Connection) -> anyhow::Result<Vec<ToolMeta>> {
                 row.get::<_, String>(13)?,
                 row.get::<_, String>(14)?,
                 row.get::<_, Option<String>>(15)?,
+                row.get::<_, String>(16)?,
+                row.get::<_, Option<String>>(17)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -128,9 +149,23 @@ pub fn list_all(conn: &Connection) -> anyhow::Result<Vec<ToolMeta>> {
             added_at: parse_ts(&r.13)?,
             last_seen_at: parse_ts(&r.14)?,
             last_used_at: r.15.as_deref().map(parse_ts).transpose()?,
+            scope: scope_from_str(&r.16)?,
+            scope_root: r.17,
         });
     }
     Ok(out)
+}
+
+/// Tool ids whose `scope='project' AND scope_root = ?`. Used by the project
+/// scope reranker to know which catalog rows belong to the active cwd
+/// without scanning every meta.
+pub fn list_project_for_root(conn: &Connection, scope_root: &str) -> anyhow::Result<Vec<String>> {
+    let mut stmt = conn
+        .prepare("SELECT id FROM tools WHERE scope = 'project' AND scope_root = ? ORDER BY id")?;
+    let rows = stmt
+        .query_map(params![scope_root], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
 }
 
 /// Delete every tool whose `source_repo` exactly matches `location`.
@@ -158,7 +193,7 @@ pub fn get(conn: &Connection, id: &str) -> anyhow::Result<Option<ToolMeta>> {
     let mut stmt = conn.prepare(
         "SELECT id, type, name, source_repo, install_path, description, long_description,
                 category, triggers, examples, invocation, requires, enabled,
-                added_at, last_seen_at, last_used_at
+                added_at, last_seen_at, last_used_at, scope, scope_root
          FROM tools WHERE id = ?",
     )?;
     let mut rows = stmt.query(rusqlite::params![id])?;
@@ -171,6 +206,8 @@ pub fn get(conn: &Connection, id: &str) -> anyhow::Result<Option<ToolMeta>> {
     let added_at: String = row.get(13)?;
     let last_seen_at: String = row.get(14)?;
     let last_used_at: Option<String> = row.get(15)?;
+    let scope: String = row.get(16)?;
+    let scope_root: Option<String> = row.get(17)?;
     Ok(Some(ToolMeta {
         id: row.get(0)?,
         r#type: type_from_str(&row.get::<_, String>(1)?)?,
@@ -188,6 +225,8 @@ pub fn get(conn: &Connection, id: &str) -> anyhow::Result<Option<ToolMeta>> {
         added_at: parse_ts(&added_at)?,
         last_seen_at: parse_ts(&last_seen_at)?,
         last_used_at: last_used_at.as_deref().map(parse_ts).transpose()?,
+        scope: scope_from_str(&scope)?,
+        scope_root,
     }))
 }
 
@@ -216,6 +255,8 @@ mod tests {
             added_at: now,
             last_seen_at: now,
             last_used_at: None,
+            scope: ToolScope::User,
+            scope_root: None,
         }
     }
 
@@ -289,5 +330,54 @@ mod tests {
         let deleted = delete_by_source_repo(&conn, "https://github.com/none/none").unwrap();
         assert!(deleted.is_empty());
         assert_eq!(list_all(&conn).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn upsert_roundtrips_project_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = open(&dir.path().join("t.sqlite")).unwrap();
+        let mut m = sample("skill:proj-tdd", "proj-tdd");
+        m.scope = ToolScope::Project;
+        m.scope_root = Some("/tmp/proj-x".to_string());
+        upsert(&conn, &m).unwrap();
+        let got = get(&conn, "skill:proj-tdd").unwrap().unwrap();
+        assert_eq!(got.scope, ToolScope::Project);
+        assert_eq!(got.scope_root.as_deref(), Some("/tmp/proj-x"));
+    }
+
+    #[test]
+    fn list_project_for_root_filters_by_scope_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = open(&dir.path().join("t.sqlite")).unwrap();
+
+        let mut a = sample("skill:proj-a", "proj-a");
+        a.scope = ToolScope::Project;
+        a.scope_root = Some("/tmp/p1".into());
+        let mut b = sample("skill:proj-b", "proj-b");
+        b.scope = ToolScope::Project;
+        b.scope_root = Some("/tmp/p2".into());
+        let c = sample("skill:user-c", "user-c"); // user-scope, no root
+        upsert(&conn, &a).unwrap();
+        upsert(&conn, &b).unwrap();
+        upsert(&conn, &c).unwrap();
+
+        let p1 = list_project_for_root(&conn, "/tmp/p1").unwrap();
+        assert_eq!(p1, vec!["skill:proj-a".to_string()]);
+        let p2 = list_project_for_root(&conn, "/tmp/p2").unwrap();
+        assert_eq!(p2, vec!["skill:proj-b".to_string()]);
+        let none = list_project_for_root(&conn, "/tmp/does-not-exist").unwrap();
+        assert!(none.is_empty());
+    }
+
+    #[test]
+    fn user_scope_default_present_for_existing_rows() {
+        // Migration 011 sets scope='user' as DEFAULT, so a row inserted via the
+        // current upsert path always lands as `User` unless the caller flips it.
+        let dir = tempfile::tempdir().unwrap();
+        let conn = open(&dir.path().join("t.sqlite")).unwrap();
+        upsert(&conn, &sample("skill:legacy", "legacy")).unwrap();
+        let got = get(&conn, "skill:legacy").unwrap().unwrap();
+        assert_eq!(got.scope, ToolScope::User);
+        assert!(got.scope_root.is_none());
     }
 }

@@ -48,6 +48,11 @@ enum Cmd {
         /// Emit JSON (matches the MCP `recommend` response shape).
         #[arg(long)]
         json: bool,
+        /// Project root used for per-project skill discovery + the
+        /// ProjectScopeReranker boost. Defaults to the current working
+        /// directory.
+        #[arg(long)]
+        cwd: Option<std::path::PathBuf>,
     },
     /// Show details for a tool by id
     Info {
@@ -166,7 +171,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.cmd {
         Cmd::List => commands::list::run().await,
         Cmd::Sync(args) => commands::sync::run(args).await,
-        Cmd::Recommend { task, json } => commands::recommend::run(task, json).await,
+        Cmd::Recommend { task, json, cwd } => commands::recommend::run(task, json, cwd).await,
         Cmd::Info { id } => {
             println!("info({id:?}): not yet implemented (Phase 1 follow-up)");
             Ok(())

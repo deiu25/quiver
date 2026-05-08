@@ -262,6 +262,8 @@ fn ingest_plugin_marketplace(root: &Path, source_url: &str) -> anyhow::Result<Ve
                 added_at: now,
                 last_seen_at: now,
                 last_used_at: None,
+                scope: quiver_core::tool::ToolScope::User,
+                scope_root: None,
             });
         }
     }
@@ -316,6 +318,8 @@ fn ingest_doc_or_codebase(
         added_at: now,
         last_seen_at: now,
         last_used_at: None,
+        scope: quiver_core::tool::ToolScope::User,
+        scope_root: None,
     })
 }
 

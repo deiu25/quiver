@@ -38,6 +38,8 @@ fn seed_tool(state: &AppState, id: &str) {
             added_at: now,
             last_seen_at: now,
             last_used_at: None,
+            scope: quiver_core::tool::ToolScope::User,
+            scope_root: None,
         },
     )
     .unwrap();

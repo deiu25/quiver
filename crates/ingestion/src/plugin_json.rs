@@ -101,6 +101,8 @@ pub fn parse_installed_plugins(
             added_at: added,
             last_seen_at: now,
             last_used_at: None,
+            scope: quiver_core::tool::ToolScope::User,
+            scope_root: None,
         });
     }
     out.sort_by(|a, b| a.id.cmp(&b.id));

@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::{Context, anyhow};
 use chrono::Utc;
-use quiver_core::tool::{ToolMeta, ToolType};
+use quiver_core::tool::{ToolMeta, ToolScope, ToolType};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -52,6 +52,8 @@ pub fn parse_skill_dir(dir: &Path) -> anyhow::Result<ToolMeta> {
         added_at: now,
         last_seen_at: now,
         last_used_at: None,
+        scope: ToolScope::User,
+        scope_root: None,
     })
 }
 

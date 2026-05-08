@@ -11,6 +11,20 @@ pub enum ToolType {
     Doc,
 }
 
+/// Scope of a catalogued tool. `User` (default) covers globally installed
+/// skills/plugins/MCP servers under `$HOME`. `Project` covers per-project
+/// skills discovered under `<cwd>/.claude/skills/` — those rows carry a
+/// `scope_root` pointing at the canonicalised project directory and earn a
+/// boost from `ProjectScopeReranker` when the active recommend originates
+/// from that same root.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ToolScope {
+    #[default]
+    User,
+    Project,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolMeta {
     pub id: String,
@@ -29,4 +43,12 @@ pub struct ToolMeta {
     pub added_at: DateTime<Utc>,
     pub last_seen_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
+    /// Default `User` for globally installed catalog entries; `Project` for
+    /// rows ingested from `<cwd>/.claude/skills/` on-the-fly.
+    #[serde(default)]
+    pub scope: ToolScope,
+    /// Canonicalised project root for `scope=Project` rows. Always `None`
+    /// for `scope=User`.
+    #[serde(default)]
+    pub scope_root: Option<String>,
 }

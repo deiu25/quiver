@@ -36,7 +36,7 @@ mod tests {
     use super::*;
     use crate::{open, tools};
     use chrono::Utc;
-    use quiver_core::tool::{ToolMeta, ToolType};
+    use quiver_core::tool::{ToolMeta, ToolScope, ToolType};
 
     fn sample(id: &str, name: &str, desc: &str) -> ToolMeta {
         let now = Utc::now();
@@ -57,6 +57,8 @@ mod tests {
             added_at: now,
             last_seen_at: now,
             last_used_at: None,
+            scope: ToolScope::User,
+            scope_root: None,
         }
     }
 

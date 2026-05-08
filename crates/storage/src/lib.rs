@@ -13,6 +13,7 @@ pub mod scores;
 pub mod sources;
 pub mod suggestions;
 pub mod tools;
+pub mod turn_intents;
 pub mod usage;
 
 const M001: &str = include_str!("../migrations/001_init.sql");
@@ -26,6 +27,7 @@ const M008: &str = include_str!("../migrations/008_mcp_npm_tombstone.sql");
 const M009: &str = include_str!("../migrations/009_suggestions_enforcement.sql");
 const M010: &str = include_str!("../migrations/010_auto_tuner.sql");
 const M011: &str = include_str!("../migrations/011_project_scope.sql");
+const M012: &str = include_str!("../migrations/012_turn_intents.sql");
 
 fn migrations() -> anyhow::Result<Vec<Migration>> {
     Ok(vec![
@@ -43,6 +45,7 @@ fn migrations() -> anyhow::Result<Vec<Migration>> {
             .context("parse V9__suggestions_enforcement")?,
         Migration::unapplied("V10__auto_tuner", M010).context("parse V10__auto_tuner")?,
         Migration::unapplied("V11__project_scope", M011).context("parse V11__project_scope")?,
+        Migration::unapplied("V12__turn_intents", M012).context("parse V12__turn_intents")?,
     ])
 }
 

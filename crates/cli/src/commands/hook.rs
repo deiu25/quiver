@@ -404,35 +404,165 @@ fn user_prompt_submit(event: serde_json::Value) -> Result<()> {
     if prompt.chars().count() < MIN_PROMPT_CHARS {
         return Ok(());
     }
+    let session_id = event
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
     let task: String = prompt.chars().take(TASK_INPUT_CAP).collect();
     let conn = open(&default_db_path()?)?;
-    let Some(top) = top_match(&conn, &task)? else {
-        return Ok(());
+
+    let result = (|| -> Result<()> {
+        let Some(top) = top_match(&conn, &task)? else {
+            return Ok(());
+        };
+        let thresholds = Thresholds::from_env();
+        let mut policy = thresholds.classify(top.score);
+        // Intent filter: question/analysis prompts must not pressure tool
+        // invocation. Runs after the score-band classifier so the policy
+        // ladder stays score-only and this gate is independently testable.
+        let detected_intent = intent::classify_intent(prompt);
+        policy = intent::apply_downgrade(policy, detected_intent);
+        if policy == Policy::Silent {
+            return Ok(());
+        }
+
+        let body = tools::get(&conn, &top.tool_id)?
+            .and_then(|m| m.long_description)
+            .map(|b| excerpt(&b, body_chars()));
+        let ctx = format_user_prompt_block(&top, body.as_deref());
+
+        let strict = EnforceMode::from_env() == EnforceMode::Strict;
+        if strict && policy.is_directive() {
+            let directive = format_directive(policy, &top, &task);
+            emit_directive_plus_context("UserPromptSubmit", directive, ctx)
+        } else {
+            emit_additional_context("UserPromptSubmit", ctx)
+        }
+    })();
+
+    // Fire-and-forget: classify intent in a detached child so the next
+    // PreToolUse can suppress vetoes for read-only investigations. Always
+    // runs after the synchronous emission above so the JSON arrives at
+    // Claude Code first, regardless of LLM latency. Failures inside the
+    // helper log + return — they never bubble up to the hook stdout.
+    spawn_detached_classify_intent(prompt, &session_id);
+
+    result
+}
+
+#[cfg(unix)]
+fn spawn_detached_classify_intent(prompt: &str, session_id: &str) {
+    use std::io::Write as _;
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    if session_id.trim().is_empty() {
+        return;
+    }
+    if intent_classifier_disabled() {
+        return;
+    }
+    if prompt.trim().len() < MIN_PROMPT_CHARS {
+        return;
+    }
+    if !intent_classifier_backend_available() {
+        // No ANTHROPIC_API_KEY and no `claude` on PATH — child would be
+        // a no-op anyway. Skip the fork.
+        return;
+    }
+
+    let bin = match std::env::current_exe() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::debug!("classify-intent spawn: current_exe failed: {e:#}");
+            return;
+        },
     };
-    let thresholds = Thresholds::from_env();
-    let mut policy = thresholds.classify(top.score);
-    // Intent filter: question/analysis prompts must not pressure tool
-    // invocation. Runs after the score-band classifier so the policy
-    // ladder stays score-only and this gate is independently testable.
-    let detected_intent = intent::classify_intent(prompt);
-    policy = intent::apply_downgrade(policy, detected_intent);
-    if policy == Policy::Silent {
-        return Ok(());
+
+    let log_path = classify_log_path();
+    if let Some(parent) = log_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
     }
+    let log = match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        Ok(f) => f,
+        Err(e) => {
+            tracing::debug!("classify-intent spawn: open log failed: {e:#}");
+            return;
+        },
+    };
+    let log_dup = match log.try_clone() {
+        Ok(f) => f,
+        Err(_) => return,
+    };
 
-    let body = tools::get(&conn, &top.tool_id)?
-        .and_then(|m| m.long_description)
-        .map(|b| excerpt(&b, body_chars()));
-    let ctx = format_user_prompt_block(&top, body.as_deref());
+    let mut child = match Command::new(&bin)
+        .arg("hook")
+        .arg("classify-intent")
+        .arg("--session")
+        .arg(session_id)
+        .stdin(Stdio::piped())
+        .stdout(log)
+        .stderr(log_dup)
+        .process_group(0)
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::debug!("classify-intent spawn: spawn failed: {e:#}");
+            return;
+        },
+    };
 
-    let strict = EnforceMode::from_env() == EnforceMode::Strict;
-    if strict && policy.is_directive() {
-        let directive = format_directive(policy, &top, &task);
-        emit_directive_plus_context("UserPromptSubmit", directive, ctx)
+    if let Some(mut stdin) = child.stdin.take() {
+        // Cap at 8 KiB to stay well below the OS pipe buffer (≥64 KiB on
+        // Linux) so write_all never blocks the parent.
+        let safe: String = prompt.chars().take(8000).collect();
+        let _ = stdin.write_all(safe.as_bytes());
+    }
+    // Drop the handle without waiting — process_group(0) detaches the child
+    // so it survives the parent's exit and finishes on its own.
+    drop(child);
+}
+
+#[cfg(not(unix))]
+fn spawn_detached_classify_intent(_prompt: &str, _session_id: &str) {
+    // Detached spawn unsupported on this platform — heuristic-only path.
+}
+
+fn classify_log_path() -> std::path::PathBuf {
+    if let Some(home) = std::env::var_os("HOME") {
+        std::path::PathBuf::from(home)
+            .join(".cache")
+            .join("quiver")
+            .join("classify.log")
     } else {
-        emit_additional_context("UserPromptSubmit", ctx)
+        std::path::PathBuf::from("/tmp/quiver/classify.log")
     }
+}
+
+/// Cheap pre-flight probe — mirrors `quiver_llm::backend::detect_backend`
+/// without instantiating the classifier. Lets the parent skip the fork
+/// when no LLM backend is available.
+fn intent_classifier_backend_available() -> bool {
+    if let Ok(k) = std::env::var("ANTHROPIC_API_KEY")
+        && !k.trim().is_empty()
+    {
+        return true;
+    }
+    if let Some(path) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path) {
+            if dir.join("claude").is_file() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn format_directive(policy: Policy, top: &TopHit, task: &str) -> String {

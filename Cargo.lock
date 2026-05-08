@@ -2722,6 +2722,7 @@ dependencies = [
  "quiver-agent",
  "quiver-core",
  "quiver-ingestion",
+ "quiver-llm",
  "quiver-mcp-server",
  "quiver-recommender",
  "quiver-storage",

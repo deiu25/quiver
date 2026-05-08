@@ -181,6 +181,17 @@ pub enum HookEvent {
     /// session has a pending `Mandatory` suggestion that was never invoked
     /// nor nudged, emit `decision: block` once.
     Stop,
+    /// Detached child spawned by UserPromptSubmit. Reads the prompt from
+    /// stdin, calls the Sonnet intent classifier, and writes a turn_intents
+    /// row keyed by `(session, prompt_hash)`. Always exits 0; never emits
+    /// JSON on stdout. Hidden from `--help` because the user shouldn't
+    /// invoke it directly.
+    #[command(hide = true)]
+    ClassifyIntent {
+        /// Claude Code session id (passed verbatim from the parent hook).
+        #[arg(long)]
+        session: String,
+    },
 }
 
 pub async fn run(event: HookEvent) -> Result<()> {
@@ -194,7 +205,82 @@ pub async fn run(event: HookEvent) -> Result<()> {
         HookEvent::UserPromptSubmit => user_prompt_submit(read_stdin()?),
         HookEvent::PreToolUse => pre_tool_use(read_stdin()?),
         HookEvent::Stop => stop(read_stdin()?),
+        HookEvent::ClassifyIntent { session } => classify_intent_cmd(session).await,
     }
+}
+
+/// Read prompt from stdin, run the Sonnet intent classifier, write the
+/// verdict to `turn_intents`. Always exits 0 — every error path is fail-open
+/// because this runs as a detached child and the parent has already exited.
+async fn classify_intent_cmd(session: String) -> Result<()> {
+    let session = session.trim().to_string();
+    if session.is_empty() {
+        tracing::debug!("classify-intent: empty session, exit 0");
+        return Ok(());
+    }
+    if intent_classifier_disabled() {
+        tracing::debug!("classify-intent: QUIVER_INTENT_CLASSIFIER disabled, exit 0");
+        return Ok(());
+    }
+
+    let mut prompt = String::new();
+    if std::io::stdin().read_to_string(&mut prompt).is_err() {
+        return Ok(());
+    }
+    let prompt = prompt.trim();
+    if prompt.len() < MIN_PROMPT_CHARS {
+        return Ok(());
+    }
+
+    let classifier = match quiver_llm::IntentClassifier::detect() {
+        Some(c) => c,
+        None => {
+            tracing::debug!("classify-intent: no LLM backend available, exit 0");
+            return Ok(());
+        },
+    };
+    let label = classifier.label();
+    let verdict = classifier.classify(prompt).await;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let hash = quiver_storage::turn_intents::prompt_hash(prompt);
+    let conn = match open(&default_db_path()?) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("classify-intent: open db failed: {e:#}");
+            return Ok(());
+        },
+    };
+    let reason = if verdict.reason.is_empty() {
+        None
+    } else {
+        Some(verdict.reason.as_str())
+    };
+    if let Err(e) = quiver_storage::turn_intents::record(
+        &conn,
+        &session,
+        &hash,
+        verdict.is_mutation,
+        label,
+        reason,
+        now,
+    ) {
+        tracing::warn!("classify-intent: write turn_intents failed: {e:#}");
+    }
+    Ok(())
+}
+
+/// Read `QUIVER_INTENT_CLASSIFIER` once. Default `auto` (on if a backend is
+/// available); `off` / `heuristic` short-circuit before any LLM call.
+fn intent_classifier_disabled() -> bool {
+    let raw = std::env::var("QUIVER_INTENT_CLASSIFIER").unwrap_or_default();
+    matches!(
+        raw.trim().to_ascii_lowercase().as_str(),
+        "off" | "disabled" | "no" | "0" | "heuristic"
+    )
 }
 
 fn read_stdin() -> Result<serde_json::Value> {
